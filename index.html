@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="theme-color" content="#d97706"/>
+<title>Programmer’s Picnic — TV PWA</title>
+
+<link rel="manifest" href="./manifest.webmanifest"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+
+<style>
+:root{
+  --bg:#fff7e6;
+  --panel:rgba(255,255,255,.88);
+  --ink:#1f2328;
+  --muted:#5b6570;
+  --line:rgba(31,35,40,.12);
+  --shadow:0 14px 40px rgba(31,35,40,.14);
+  --radius:22px;
+  --saffron:#d97706;
+  --saffron2:#ffb74d;
+  --focus:0 0 0 4px rgba(217,119,6,.35),0 0 0 8px rgba(255,183,77,.25);
+  --safe:40px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Inter,system-ui;
+  background:radial-gradient(1200px 800px at 20% 10%, rgba(255,183,77,.55), transparent 55%), var(--bg);
+  padding:var(--safe);
+  color:var(--ink);
+}
+.topbar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:var(--panel);
+  padding:18px;
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+.brand{
+  display:flex;
+  gap:14px;
+  align-items:center;
+}
+.logo{
+  width:60px;height:60px;
+  border-radius:18px;
+  display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--saffron),var(--saffron2));
+  color:white;font-weight:800;
+  font-family:"DM Sans";
+}
+h1{
+  font-family:"DM Sans";
+  font-weight:800;
+  margin:20px 0 8px;
+  font-size:36px;
+}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:18px;
+  margin-top:20px;
+}
+.card{
+  background:var(--panel);
+  border-radius:24px;
+  padding:22px;
+  border:1px solid var(--line);
+  box-shadow:var(--shadow);
+  cursor:pointer;
+  outline:none;
+  min-height:140px;
+}
+.card:focus{
+  box-shadow:var(--shadow),var(--focus);
+  transform:scale(1.05);
+}
+.card h3{
+  margin:0 0 8px;
+  font-family:"DM Sans";
+  font-size:20px;
+}
+.card p{
+  margin:0;
+  color:var(--muted);
+}
+.toast{
+  position:fixed;
+  bottom:40px;
+  left:40px;
+  background:#1f2328;
+  color:white;
+  padding:12px 16px;
+  border-radius:16px;
+  opacity:0;
+  transition:.2s;
+}
+.toast.show{opacity:1}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="logo">PP</div>
+    <div>
+      <div style="font-family:'DM Sans';font-weight:800;">Programmer’s Picnic</div>
+      <div style="color:var(--muted);font-size:14px;">Android TV • Installable PWA</div>
+    </div>
+  </div>
+  <div style="color:var(--muted);font-size:14px;">Use D-pad + Enter</div>
+</div>
+
+<h1>TV App Launcher</h1>
+
+<div class="grid" id="grid"></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const apps=[
+ {title:"Python Starter Club",desc:"Interactive Python learning.",url:"https://programmer-s-picnic.github.io/"},
+ {title:"Saturday Questions",desc:"Solve coding challenges.",url:"https://programmer-s-picnic.github.io/lesson-viewer/"},
+ {title:"JavaScript Champion",desc:"Build JS projects.",url:"https://programmer-s-picnic.github.io/"},
+ {title:"Punya Yatra",desc:"Tour planner for TV.",url:"https://punyayatra.in/"},
+ {title:"Offline Test",desc:"Test offline mode.",action:"toast"},
+ {title:"Reload",desc:"Reload the app.",action:"reload"}
+];
+
+const grid=document.getElementById("grid");
+apps.forEach((a,i)=>{
+ const btn=document.createElement("button");
+ btn.className="card";
+ btn.innerHTML=`<h3>${a.title}</h3><p>${a.desc}</p>`;
+ btn.onclick=()=>activate(i);
+ grid.appendChild(btn);
+});
+grid.querySelector("button").focus();
+
+function activate(i){
+ const a=apps[i];
+ if(a.action==="toast"){showToast("Offline works after reload.");return;}
+ if(a.action==="reload"){location.reload();return;}
+ if(a.url){location.href=a.url;}
+}
+
+function showToast(msg){
+ const t=document.getElementById("toast");
+ t.textContent=msg;
+ t.classList.add("show");
+ setTimeout(()=>t.classList.remove("show"),2000);
+}
+
+document.addEventListener("keydown",e=>{
+ const cards=[...document.querySelectorAll(".card")];
+ const idx=cards.indexOf(document.activeElement);
+ const cols=4;
+ let next=idx;
+ if(e.key==="ArrowRight")next=idx+1;
+ if(e.key==="ArrowLeft")next=idx-1;
+ if(e.key==="ArrowDown")next=idx+cols;
+ if(e.key==="ArrowUp")next=idx-cols;
+ if(next>=0 && next<cards.length){
+   cards[next].focus();
+   e.preventDefault();
+ }
+ if(e.key==="Enter")document.activeElement.click();
+});
+
+if("serviceWorker" in navigator){
+ navigator.serviceWorker.register("./service-worker.js");
+}
+</script>
+
+</body>
+</html>

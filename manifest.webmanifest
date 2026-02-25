@@ -1,0 +1,13 @@
+{
+  "name": "Programmer’s Picnic — TV",
+  "short_name": "PP TV",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fff7e6",
+  "theme_color": "#d97706",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
