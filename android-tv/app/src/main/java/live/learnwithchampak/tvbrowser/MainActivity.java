@@ -1,326 +1,319 @@
 package live.learnwithchampak.tvbrowser;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.DownloadManager;
-import android.content.ActivityNotFoundException;
+import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
-import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
-import android.webkit.CookieManager;
-import android.webkit.DownloadListener;
-import android.webkit.URLUtil;
-import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.ArrayAdapter;
-import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.json.JSONArray;
+import androidx.core.content.FileProvider;
+
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.Locale;
+import java.util.List;
 
 public class MainActivity extends Activity {
-    private static final String PREFS = "browser_prefs";
-    private static final String KEY_HISTORY = "history";
-    private static final String KEY_BOOKMARKS = "bookmarks";
-    private static final String KEY_HOME = "home";
-    private static final String KEY_DESKTOP = "desktop";
+    private static final String UPDATE_INFO =
+            "https://raw.githubusercontent.com/Programmer-s-Picnic/tv/main/android-tv/update.json";
 
-    private LinearLayout toolbar;
-    private AutoCompleteTextView addressBar;
-    private WebView webView;
-    private ProgressBar progressBar;
-    private FrameLayout root;
-    private View customView;
-    private WebChromeClient.CustomViewCallback customViewCallback;
-    private boolean desktopMode;
-    private String homePage;
-    private ValueCallback<Uri[]> fileChooserCallback;
+    private final List<BrowserTab> tabs = new ArrayList<>();
+    private LinearLayout tabStrip;
+    private FrameLayout webContainer;
+    private EditText addressBar;
+    private TextView pointer;
+    private BrowserTab activeTab;
+    private float pointerX = 500;
+    private float pointerY = 300;
+
+    private static class BrowserTab {
+        WebView webView;
+        Button tabButton;
+        String title = "New Tab";
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-
-        homePage = getPreferencesStore().getString(KEY_HOME, "https://www.google.com/");
-        desktopMode = getPreferencesStore().getBoolean(KEY_DESKTOP, true);
-
         buildUi();
-        configureWebView();
-        refreshSuggestions();
+        newTab();
 
-        Uri incoming = getIntent() != null ? getIntent().getData() : null;
-        if (incoming != null) {
-            loadInput(incoming.toString());
-        } else {
-            showStartPage();
-        }
-    }
+        Uri incoming = getIntent() == null ? null : getIntent().getData();
+        if (incoming != null) loadUrl(incoming.toString());
 
-    private android.content.SharedPreferences getPreferencesStore() {
-        return getSharedPreferences(PREFS, MODE_PRIVATE);
+        requestDefaultBrowser();
+        getWindow().getDecorView().postDelayed(this::ensureUpdatePermission, 800);
+        getWindow().getDecorView().postDelayed(this::checkForUpdates, 1800);
     }
 
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
-    private Button makeButton(String label, String description) {
-        Button button = new Button(this);
-        button.setText(label);
-        button.setTextSize(18);
-        button.setContentDescription(description);
-        button.setFocusable(true);
-        button.setFocusableInTouchMode(true);
-        button.setMinWidth(dp(54));
-        button.setMinHeight(dp(50));
+    private TextView brandText() {
+        TextView text = new TextView(this);
+        text.setText("Champak Roy");
+        text.setTextColor(Color.rgb(18, 55, 105));
+        text.setTextSize(20);
+        text.setGravity(Gravity.CENTER_VERTICAL);
+        text.setPadding(dp(8), 0, dp(12), 0);
+        text.setTypeface(null, android.graphics.Typeface.BOLD);
+        return text;
+    }
+
+    private Button button(String label) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setTextSize(16);
+        b.setMinHeight(dp(50));
+        b.setFocusable(false);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        lp.setMargins(dp(2), 0, dp(2), 0);
-        button.setLayoutParams(lp);
-        return button;
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(50));
+        lp.setMargins(dp(3), 0, dp(3), 0);
+        b.setLayoutParams(lp);
+        return b;
     }
 
     private void buildUi() {
-        root = new FrameLayout(this);
-        root.setBackgroundColor(Color.BLACK);
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.rgb(232, 244, 255));
 
-        LinearLayout vertical = new LinearLayout(this);
-        vertical.setOrientation(LinearLayout.VERTICAL);
-        vertical.setBackgroundColor(Color.rgb(13, 27, 42));
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
 
-        toolbar = new LinearLayout(this);
-        toolbar.setOrientation(LinearLayout.HORIZONTAL);
-        toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.setPadding(dp(4), dp(3), dp(4), dp(3));
-        toolbar.setMinimumHeight(dp(58));
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setPadding(dp(8), dp(6), dp(8), dp(6));
+        top.setBackgroundColor(Color.rgb(225, 240, 255));
 
-        Button back = makeButton("‹", "Back");
-        back.setOnClickListener(v -> {
-            if (webView.canGoBack()) webView.goBack();
-        });
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.champak_logo);
+        logo.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(dp(48), dp(48));
+        logoLp.setMargins(0, 0, dp(4), 0);
+        logo.setLayoutParams(logoLp);
 
-        Button forward = makeButton("›", "Forward");
-        forward.setOnClickListener(v -> {
-            if (webView.canGoForward()) webView.goForward();
-        });
-
-        Button refresh = makeButton("↻", "Refresh");
-        refresh.setOnClickListener(v -> webView.reload());
-
-        Button home = makeButton("⌂", "Home");
-        home.setOnClickListener(v -> showStartPage());
-
-        addressBar = new AutoCompleteTextView(this);
+        addressBar = new EditText(this);
         addressBar.setSingleLine(true);
+        addressBar.setHint("Enter address or search");
         addressBar.setTextSize(18);
-        addressBar.setHint("Search or enter address");
         addressBar.setImeOptions(EditorInfo.IME_ACTION_GO);
-        addressBar.setSelectAllOnFocus(true);
-        addressBar.setThreshold(1);
         addressBar.setPadding(dp(12), 0, dp(12), 0);
         addressBar.setBackgroundColor(Color.WHITE);
-        addressBar.setTextColor(Color.BLACK);
-        addressBar.setHintTextColor(Color.DKGRAY);
-        addressBar.setFocusable(true);
-        addressBar.setFocusableInTouchMode(true);
         LinearLayout.LayoutParams addressLp = new LinearLayout.LayoutParams(0, dp(50), 1f);
-        addressLp.setMargins(dp(4), 0, dp(4), 0);
+        addressLp.setMargins(dp(6), 0, dp(6), 0);
         addressBar.setLayoutParams(addressLp);
         addressBar.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_GO ||
                     (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
-                loadInput(addressBar.getText().toString());
+                loadFromAddressBar();
                 return true;
             }
             return false;
         });
-        addressBar.setOnItemClickListener((parent, view, position, id) -> {
-            String value = String.valueOf(parent.getItemAtPosition(position));
-            loadInput(value);
+
+        Button go = button("Go");
+        go.setOnClickListener(v -> loadFromAddressBar());
+
+        Button reload = button("Reload");
+        reload.setOnClickListener(v -> {
+            if (activeTab != null) activeTab.webView.reload();
         });
 
-        Button go = makeButton("Go", "Go");
-        go.setOnClickListener(v -> loadInput(addressBar.getText().toString()));
+        Button newTab = button("+ New Tab");
+        newTab.setOnClickListener(v -> newTab());
 
-        Button bookmark = makeButton("★", "Bookmark");
-        bookmark.setOnClickListener(v -> bookmarkCurrentPage());
-        bookmark.setOnLongClickListener(v -> {
-            showBookmarks();
-            return true;
-        });
+        Button closeAll = button("Close All Tabs");
+        closeAll.setOnClickListener(v -> closeAllTabs());
 
-        Button menu = makeButton("⋮", "Menu");
-        menu.setOnClickListener(v -> showMenu());
+        top.addView(logo);
+        top.addView(brandText());
+        top.addView(addressBar);
+        top.addView(go);
+        top.addView(reload);
+        top.addView(newTab);
+        top.addView(closeAll);
 
-        toolbar.addView(back);
-        toolbar.addView(forward);
-        toolbar.addView(refresh);
-        toolbar.addView(home);
-        toolbar.addView(addressBar);
-        toolbar.addView(go);
-        toolbar.addView(bookmark);
-        toolbar.addView(menu);
+        HorizontalScrollView tabScroll = new HorizontalScrollView(this);
+        tabScroll.setHorizontalScrollBarEnabled(false);
+        tabScroll.setBackgroundColor(Color.rgb(211, 232, 252));
+        tabStrip = new LinearLayout(this);
+        tabStrip.setOrientation(LinearLayout.HORIZONTAL);
+        tabStrip.setPadding(dp(8), dp(4), dp(8), dp(4));
+        tabScroll.addView(tabStrip, new HorizontalScrollView.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        progressBar.setMax(100);
-        progressBar.setProgress(0);
-        progressBar.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(3)));
-
-        webView = new WebView(this);
-        webView.setBackgroundColor(Color.WHITE);
-        webView.setFocusable(true);
-        webView.setFocusableInTouchMode(true);
-        webView.setLayoutParams(new LinearLayout.LayoutParams(
+        webContainer = new FrameLayout(this);
+        webContainer.setBackgroundColor(Color.WHITE);
+        webContainer.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        vertical.addView(toolbar);
-        vertical.addView(progressBar);
-        vertical.addView(webView);
-        root.addView(vertical);
-        setContentView(root);
+        page.addView(top);
+        page.addView(tabScroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        page.addView(webContainer);
+        root.addView(page, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Good initial focus for TV remotes while still allowing one press to reach the page.
-        addressBar.requestFocus();
+        pointer = new TextView(this);
+        pointer.setText("➤");
+        pointer.setTextSize(38);
+        pointer.setTextColor(Color.WHITE);
+        pointer.setShadowLayer(6, 2, 2, Color.BLACK);
+        pointer.setGravity(Gravity.CENTER);
+        pointer.setFocusable(false);
+        pointer.setClickable(false);
+        FrameLayout.LayoutParams pp = new FrameLayout.LayoutParams(dp(58), dp(58));
+        pointer.setLayoutParams(pp);
+        root.addView(pointer);
+
+        setContentView(root);
+        root.post(() -> {
+            pointerX = root.getWidth() / 2f;
+            pointerY = root.getHeight() / 2f;
+            updatePointer();
+        });
     }
 
-    private void configureWebView() {
-        WebSettings s = webView.getSettings();
+    private void newTab() {
+        BrowserTab tab = new BrowserTab();
+        tab.webView = createWebView(tab);
+        tab.tabButton = button("New Tab");
+        tab.tabButton.setMinWidth(dp(150));
+        tab.tabButton.setOnClickListener(v -> activateTab(tab));
+
+        tabs.add(tab);
+        tabStrip.addView(tab.tabButton);
+        webContainer.addView(tab.webView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        activateTab(tab);
+        showStartPage(tab.webView);
+    }
+
+    private WebView createWebView(BrowserTab tab) {
+        WebView web = new WebView(this);
+        web.setBackgroundColor(Color.WHITE);
+        WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setAllowFileAccess(false);
-        s.setAllowContentAccess(true);
         s.setSupportZoom(true);
         s.setBuiltInZoomControls(true);
         s.setDisplayZoomControls(false);
-        s.setMediaPlaybackRequiresUserGesture(false);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
-        applyUserAgent();
+        s.setMediaPlaybackRequiresUserGesture(false);
 
-        CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
-
-        webView.setWebViewClient(new WebViewClient() {
+        web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                Uri uri = request.getUrl();
-                String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-                if ("http".equals(scheme) || "https".equals(scheme)) return false;
-                try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
-                } catch (ActivityNotFoundException e) {
-                    Toast.makeText(MainActivity.this, "No app can open this link.", Toast.LENGTH_SHORT).show();
-                }
-                return true;
+                String scheme = request.getUrl().getScheme();
+                return !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                addressBar.setText(url);
-                addHistory(url);
-                refreshSuggestions();
+                if (tab == activeTab) addressBar.setText(url);
             }
         });
 
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onProgressChanged(WebView view, int newProgress) {
-                progressBar.setProgress(newProgress);
-                progressBar.setVisibility(newProgress >= 100 ? View.GONE : View.VISIBLE);
-            }
-
+        web.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onReceivedTitle(WebView view, String title) {
-                if (view.getUrl() != null && !view.getUrl().startsWith("about:")) {
-                    addHistory(view.getUrl());
-                }
-            }
-
-            @Override
-            public void onShowCustomView(View view, CustomViewCallback callback) {
-                if (customView != null) {
-                    callback.onCustomViewHidden();
-                    return;
-                }
-                customView = view;
-                customViewCallback = callback;
-                toolbar.setVisibility(View.GONE);
-                progressBar.setVisibility(View.GONE);
-                webView.setVisibility(View.GONE);
-                root.addView(view, new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-                getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            }
-
-            @Override
-            public void onHideCustomView() {
-                hideCustomView();
-            }
-
-            @Override
-            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
-                                             FileChooserParams fileChooserParams) {
-                if (fileChooserCallback != null) fileChooserCallback.onReceiveValue(null);
-                fileChooserCallback = filePathCallback;
-                try {
-                    startActivityForResult(fileChooserParams.createIntent(), 9001);
-                    return true;
-                } catch (ActivityNotFoundException e) {
-                    fileChooserCallback = null;
-                    return false;
-                }
+                if (title == null || title.trim().isEmpty()) title = "Tab";
+                tab.title = title.length() > 18 ? title.substring(0, 18) + "…" : title;
+                tab.tabButton.setText(tab.title);
             }
         });
 
-        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) ->
-                startDownload(url, userAgent, contentDisposition, mimeType));
+        web.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+            try {
+                DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+                req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "download");
+                ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(req);
+                Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Download failed", Toast.LENGTH_SHORT).show();
+            }
+        });
+        return web;
     }
 
-    private void applyUserAgent() {
-        WebSettings s = webView.getSettings();
-        if (desktopMode) {
-            s.setUserAgentString("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36");
-        } else {
-            s.setUserAgentString(null);
+    private void activateTab(BrowserTab tab) {
+        activeTab = tab;
+        for (BrowserTab t : tabs) {
+            t.webView.setVisibility(t == tab ? View.VISIBLE : View.GONE);
+            t.tabButton.setAlpha(t == tab ? 1f : 0.65f);
         }
+        String url = tab.webView.getUrl();
+        addressBar.setText(url == null || url.startsWith("data:") ? "" : url);
     }
 
-    private void loadInput(String raw) {
+    private void closeAllTabs() {
+        for (BrowserTab tab : tabs) {
+            webContainer.removeView(tab.webView);
+            tab.webView.destroy();
+        }
+        tabs.clear();
+        tabStrip.removeAllViews();
+        activeTab = null;
+        newTab();
+        Toast.makeText(this, "All tabs closed", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showStartPage(WebView web) {
+        String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
+                + "<style>body{font-family:sans-serif;background:#edf7ff;color:#17365d;text-align:center;padding:10vh 4vw}"
+                + "h1{font-size:7vh;margin:0 0 2vh}p{font-size:3vh}.box{display:inline-block;padding:4vh 5vw;"
+                + "background:#fff;border:3px solid #4aa3ff;border-radius:22px;font-size:3.2vh}</style></head>"
+                + "<body><h1>Champak TV Browser</h1><p>Use the remote arrows to move the pointer.</p>"
+                + "<div class='box'>Move pointer • Press OK to click</div></body></html>";
+        web.loadDataWithBaseURL("https://start.learnwithchampak.live/", html, "text/html", "UTF-8", null);
+        addressBar.setText("");
+    }
+
+    private void loadFromAddressBar() {
+        loadUrl(addressBar.getText().toString());
+    }
+
+    private void loadUrl(String raw) {
+        if (activeTab == null) newTab();
         String input = raw == null ? "" : raw.trim();
-        if (input.isEmpty()) {
-            addressBar.requestFocus();
-            return;
-        }
+        if (input.isEmpty()) return;
 
         String url;
         if (input.matches("(?i)^https?://.+")) {
@@ -330,294 +323,142 @@ public class MainActivity extends Activity {
         } else {
             url = "https://www.google.com/search?q=" + Uri.encode(input);
         }
-        webView.loadUrl(url);
-        webView.requestFocus();
+        activeTab.webView.loadUrl(url);
     }
 
-    private void showStartPage() {
-        String html = "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
-                + "<style>body{font-family:sans-serif;background:#eaf4ff;color:#10243e;text-align:center;margin:0;padding:8vh 5vw}"
-                + "h1{font-size:7vh;margin:0 0 5vh}.tiles{display:flex;justify-content:center;gap:3vw;flex-wrap:wrap}"
-                + "a{display:block;min-width:22vw;padding:5vh 2vw;background:white;border:4px solid #1976d2;border-radius:18px;"
-                + "font-size:4vh;text-decoration:none;color:#0d47a1}p{font-size:2.5vh}</style></head>"
-                + "<body><h1>Champak TV Browser</h1><div class='tiles'>"
-                + "<a href='https://www.google.com/'>Google</a>"
-                + "<a href='https://www.youtube.com/'>YouTube</a>"
-                + "<a href='" + escapeHtml(homePage) + "'>Homepage</a></div>"
-                + "<p>Press ↑ to reach the address bar. Use the remote D-pad and OK button to browse.</p></body></html>";
-        webView.loadDataWithBaseURL("https://start.learnwithchampak.live/", html, "text/html", "UTF-8", null);
-        addressBar.setText("");
-    }
-
-    private String escapeHtml(String value) {
-        if (value == null) return "";
-        return value.replace("&", "&amp;").replace("'", "&#39;").replace("<", "&lt;").replace(">", "&gt;");
-    }
-
-    private void startDownload(String url, String userAgent, String contentDisposition, String mimeType) {
-        try {
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-            String name = URLUtil.guessFileName(url, contentDisposition, mimeType);
-            request.setTitle(name);
-            request.setDescription("Downloading from Champak TV Browser");
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name);
-            String cookie = CookieManager.getInstance().getCookie(url);
-            if (cookie != null) request.addRequestHeader("Cookie", cookie);
-            if (userAgent != null) request.addRequestHeader("User-Agent", userAgent);
-            DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            manager.enqueue(request);
-            Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            Toast.makeText(this, "Download failed", Toast.LENGTH_LONG).show();
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            float step = dp(28);
+            switch (event.getKeyCode()) {
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                    pointerX -= step; clampPointer(); updatePointer(); return true;
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    pointerX += step; clampPointer(); updatePointer(); return true;
+                case KeyEvent.KEYCODE_DPAD_UP:
+                    pointerY -= step; clampPointer(); updatePointer(); return true;
+                case KeyEvent.KEYCODE_DPAD_DOWN:
+                    pointerY += step; clampPointer(); updatePointer(); return true;
+                case KeyEvent.KEYCODE_DPAD_CENTER:
+                case KeyEvent.KEYCODE_ENTER:
+                case KeyEvent.KEYCODE_BUTTON_A:
+                    clickPointer();
+                    return true;
+            }
         }
+        return super.dispatchKeyEvent(event);
     }
 
-    private void bookmarkCurrentPage() {
-        String url = webView.getUrl();
-        if (url == null || url.startsWith("data:")) return;
-        JSONArray items = readArray(KEY_BOOKMARKS);
+    private void clampPointer() {
+        View root = (View) pointer.getParent();
+        pointerX = Math.max(dp(8), Math.min(pointerX, root.getWidth() - dp(8)));
+        pointerY = Math.max(dp(8), Math.min(pointerY, root.getHeight() - dp(8)));
+    }
+
+    private void updatePointer() {
+        pointer.setX(pointerX - pointer.getWidth() / 2f);
+        pointer.setY(pointerY - pointer.getHeight() / 2f);
+        pointer.bringToFront();
+    }
+
+    private void clickPointer() {
+        pointer.setVisibility(View.INVISIBLE);
+        long now = System.currentTimeMillis();
+        MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, pointerX, pointerY, 0);
+        MotionEvent up = MotionEvent.obtain(now, now + 50, MotionEvent.ACTION_UP, pointerX, pointerY, 0);
+        super.dispatchTouchEvent(down);
+        super.dispatchTouchEvent(up);
+        down.recycle();
+        up.recycle();
+        pointer.setVisibility(View.VISIBLE);
+        pointer.bringToFront();
+    }
+
+    private void requestDefaultBrowser() {
         try {
-            for (int i = 0; i < items.length(); i++) {
-                if (url.equals(items.getJSONObject(i).optString("url"))) {
-                    Toast.makeText(this, "Already bookmarked", Toast.LENGTH_SHORT).show();
-                    return;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                RoleManager roleManager = (RoleManager) getSystemService(ROLE_SERVICE);
+                if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)
+                        && !roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) {
+                    startActivityForResult(roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER), 7001);
                 }
+            } else {
+                startActivity(new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS));
             }
-            JSONObject o = new JSONObject();
-            o.put("url", url);
-            o.put("title", webView.getTitle() == null ? url : webView.getTitle());
-            items.put(o);
-            saveArray(KEY_BOOKMARKS, items);
-            refreshSuggestions();
-            Toast.makeText(this, "Bookmark saved", Toast.LENGTH_SHORT).show();
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
-    private void addHistory(String url) {
-        if (url == null || url.startsWith("data:") || url.startsWith("about:")) return;
-        JSONArray old = readArray(KEY_HISTORY);
-        JSONArray next = new JSONArray();
-        try {
-            JSONObject first = new JSONObject();
-            first.put("url", url);
-            first.put("title", webView.getTitle() == null ? url : webView.getTitle());
-            next.put(first);
-            int count = 1;
-            for (int i = 0; i < old.length() && count < 50; i++) {
-                JSONObject o = old.getJSONObject(i);
-                if (!url.equals(o.optString("url"))) {
-                    next.put(o);
-                    count++;
+    private void ensureUpdatePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && !getPackageManager().canRequestPackageInstalls()) {
+            try {
+                Intent i = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + getPackageName()));
+                startActivity(i);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private void checkForUpdates() {
+        new Thread(() -> {
+            try {
+                HttpURLConnection c = (HttpURLConnection) new URL(UPDATE_INFO).openConnection();
+                c.setConnectTimeout(6000);
+                c.setReadTimeout(6000);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(c.getInputStream()));
+                StringBuilder body = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) body.append(line);
+                reader.close();
+
+                JSONObject json = new JSONObject(body.toString());
+                int remoteCode = json.getInt("versionCode");
+                if (remoteCode > BuildConfig.VERSION_CODE) {
+                    String apk = json.getString("apkUrl");
+                    downloadAndInstallUpdate(apk);
                 }
+            } catch (Exception ignored) {
             }
-            saveArray(KEY_HISTORY, next);
-        } catch (Exception ignored) {}
+        }).start();
     }
 
-    private JSONArray readArray(String key) {
+    private void downloadAndInstallUpdate(String apkUrl) {
         try {
-            return new JSONArray(getPreferencesStore().getString(key, "[]"));
-        } catch (Exception e) {
-            return new JSONArray();
-        }
-    }
+            HttpURLConnection c = (HttpURLConnection) new URL(apkUrl).openConnection();
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(15000);
+            File target = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "champak-tv-browser-update.apk");
+            BufferedInputStream in = new BufferedInputStream(c.getInputStream());
+            FileOutputStream out = new FileOutputStream(target);
+            byte[] buffer = new byte[8192];
+            int n;
+            while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
+            out.close();
+            in.close();
 
-    private void saveArray(String key, JSONArray array) {
-        getPreferencesStore().edit().putString(key, array.toString()).apply();
-    }
-
-    private void refreshSuggestions() {
-        LinkedHashSet<String> suggestions = new LinkedHashSet<>();
-        collectUrls(suggestions, readArray(KEY_BOOKMARKS));
-        collectUrls(suggestions, readArray(KEY_HISTORY));
-        ArrayList<String> list = new ArrayList<>(suggestions);
-        addressBar.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, list));
-    }
-
-    private void collectUrls(LinkedHashSet<String> target, JSONArray array) {
-        try {
-            for (int i = 0; i < array.length(); i++) {
-                String url = array.getJSONObject(i).optString("url");
-                if (!url.isEmpty()) target.add(url);
-            }
-        } catch (Exception ignored) {}
-    }
-
-    private void showBookmarks() {
-        JSONArray array = readArray(KEY_BOOKMARKS);
-        showStoredPages("Bookmarks", array, true);
-    }
-
-    private void showHistory() {
-        JSONArray array = readArray(KEY_HISTORY);
-        showStoredPages("History", array, false);
-    }
-
-    private void showStoredPages(String title, JSONArray array, boolean allowDelete) {
-        if (array.length() == 0) {
-            Toast.makeText(this, title + " is empty", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        ArrayList<String> labels = new ArrayList<>();
-        ArrayList<String> urls = new ArrayList<>();
-        try {
-            for (int i = 0; i < array.length(); i++) {
-                JSONObject o = array.getJSONObject(i);
-                String t = o.optString("title", o.optString("url"));
-                String u = o.optString("url");
-                labels.add(t + "\n" + u);
-                urls.add(u);
-            }
-        } catch (Exception ignored) {}
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(title)
-                .setItems(labels.toArray(new String[0]), (d, which) -> loadInput(urls.get(which)))
-                .setNegativeButton("Close", null)
-                .create();
-
-        if (allowDelete) {
-            dialog.setOnShowListener(d -> {
-                // Long-press deletion is intentionally deferred to keep TV interaction predictable.
+            runOnUiThread(() -> {
+                try {
+                    Uri uri = FileProvider.getUriForFile(this,
+                            getPackageName() + ".fileprovider", target);
+                    Intent install = new Intent(Intent.ACTION_VIEW);
+                    install.setDataAndType(uri, "application/vnd.android.package-archive");
+                    install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(install);
+                } catch (Exception e) {
+                    Toast.makeText(this, "Update downloaded. Allow app installs to continue.", Toast.LENGTH_LONG).show();
+                    ensureUpdatePermission();
+                }
             });
+        } catch (Exception ignored) {
         }
-        dialog.show();
-    }
-
-    private void showMenu() {
-        String[] items = {
-                "Bookmarks",
-                "History",
-                "Downloads",
-                desktopMode ? "Switch to Mobile mode" : "Switch to Desktop mode",
-                "Zoom in",
-                "Zoom out",
-                "Reset zoom",
-                "Set homepage",
-                "Clear history",
-                "Clear cookies & site data",
-                "Android WebView settings",
-                "About"
-        };
-        new AlertDialog.Builder(this)
-                .setTitle("Browser menu")
-                .setItems(items, (dialog, which) -> {
-                    switch (which) {
-                        case 0: showBookmarks(); break;
-                        case 1: showHistory(); break;
-                        case 2:
-                            try { startActivity(new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)); }
-                            catch (Exception e) { Toast.makeText(this, "Downloads screen unavailable", Toast.LENGTH_SHORT).show(); }
-                            break;
-                        case 3:
-                            desktopMode = !desktopMode;
-                            getPreferencesStore().edit().putBoolean(KEY_DESKTOP, desktopMode).apply();
-                            applyUserAgent();
-                            webView.reload();
-                            break;
-                        case 4: webView.zoomIn(); break;
-                        case 5: webView.zoomOut(); break;
-                        case 6: webView.setInitialScale(0); webView.reload(); break;
-                        case 7: editHomepage(); break;
-                        case 8:
-                            saveArray(KEY_HISTORY, new JSONArray());
-                            refreshSuggestions();
-                            Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show();
-                            break;
-                        case 9:
-                            webView.clearCache(true);
-                            webView.clearFormData();
-                            CookieManager.getInstance().removeAllCookies(null);
-                            CookieManager.getInstance().flush();
-                            Toast.makeText(this, "Site data cleared", Toast.LENGTH_SHORT).show();
-                            break;
-                        case 10:
-                            try {
-                                Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                        Uri.parse("package:" + getPackageName()));
-                                startActivity(i);
-                            } catch (Exception ignored) {}
-                            break;
-                        case 11:
-                            new AlertDialog.Builder(this)
-                                    .setTitle("Champak TV Browser")
-                                    .setMessage("Version 1.0.0\n\nA lightweight Android TV browser by Learn With Champak.\n\nRemote-first, single-tab first release.")
-                                    .setPositiveButton("OK", null)
-                                    .show();
-                            break;
-                    }
-                })
-                .show();
-    }
-
-    private void editHomepage() {
-        EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setText(homePage);
-        input.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(this)
-                .setTitle("Homepage")
-                .setView(input)
-                .setPositiveButton("Save", (d, w) -> {
-                    String value = input.getText().toString().trim();
-                    if (!value.isEmpty()) {
-                        if (!value.matches("(?i)^https?://.+")) value = "https://" + value;
-                        homePage = value;
-                        getPreferencesStore().edit().putString(KEY_HOME, value).apply();
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private void hideCustomView() {
-        if (customView == null) return;
-        root.removeView(customView);
-        customView = null;
-        toolbar.setVisibility(View.VISIBLE);
-        webView.setVisibility(View.VISIBLE);
-        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        if (customViewCallback != null) customViewCallback.onCustomViewHidden();
-        customViewCallback = null;
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (customView != null) {
-            hideCustomView();
-        } else if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == 9001) {
-            Uri[] results = null;
-            if (resultCode == RESULT_OK && data != null) {
-                if (data.getClipData() != null) {
-                    int count = data.getClipData().getItemCount();
-                    results = new Uri[count];
-                    for (int i = 0; i < count; i++) results[i] = data.getClipData().getItemAt(i).getUri();
-                } else if (data.getData() != null) {
-                    results = new Uri[]{data.getData()};
-                }
-            }
-            if (fileChooserCallback != null) fileChooserCallback.onReceiveValue(results);
-            fileChooserCallback = null;
-            return;
-        }
-        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
     protected void onDestroy() {
-        if (webView != null) {
-            webView.stopLoading();
-            webView.destroy();
+        for (BrowserTab tab : tabs) {
+            tab.webView.destroy();
         }
         super.onDestroy();
     }
