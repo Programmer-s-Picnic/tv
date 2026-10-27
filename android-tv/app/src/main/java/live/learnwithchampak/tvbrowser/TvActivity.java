@@ -17,6 +17,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -82,6 +83,26 @@ public class TvActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
+    private void hideKeyboardAndClearAddressFocus() {
+        try {
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            View focused = getCurrentFocus();
+            if (imm != null && focused != null) {
+                imm.hideSoftInputFromWindow(focused.getWindowToken(), 0);
+            }
+        } catch (Exception ignored) {
+        }
+        if (addressBar != null) {
+            addressBar.clearFocus();
+        }
+        if (activeTab != null && activeTab.webView != null) {
+            activeTab.webView.requestFocus();
+        }
+        if (pointer != null) {
+            pointer.bringToFront();
+        }
+    }
+
     private TextView brandText() {
         TextView text = new TextView(this);
         text.setText("Champak Roy");
@@ -140,13 +161,17 @@ public class TvActivity extends Activity {
             if (actionId == EditorInfo.IME_ACTION_GO ||
                     (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
                 loadFromAddressBar();
+                hideKeyboardAndClearAddressFocus();
                 return true;
             }
             return false;
         });
 
         Button go = button("Go");
-        go.setOnClickListener(v -> loadFromAddressBar());
+        go.setOnClickListener(v -> {
+            loadFromAddressBar();
+            hideKeyboardAndClearAddressFocus();
+        });
 
         Button reload = button("Reload");
         reload.setOnClickListener(v -> {
@@ -331,6 +356,16 @@ public class TvActivity extends Activity {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             float step = dp(28);
             switch (event.getKeyCode()) {
+                case KeyEvent.KEYCODE_BACK:
+                    if (addressBar != null && addressBar.hasFocus()) {
+                        hideKeyboardAndClearAddressFocus();
+                        return true;
+                    }
+                    if (activeTab != null && activeTab.webView.canGoBack()) {
+                        activeTab.webView.goBack();
+                        return true;
+                    }
+                    break;
                 case KeyEvent.KEYCODE_DPAD_LEFT:
                     pointerX -= step; clampPointer(); updatePointer(); return true;
                 case KeyEvent.KEYCODE_DPAD_RIGHT:
