@@ -65,6 +65,22 @@ public class TvActivity extends Activity {
         String title = "New Tab";
     }
 
+    private class TvEditText extends EditText {
+        TvEditText(Context context) {
+            super(context);
+        }
+
+        @Override
+        public boolean onKeyPreIme(int keyCode, KeyEvent event) {
+            if (keyCode == KeyEvent.KEYCODE_BACK &&
+                    event.getAction() == KeyEvent.ACTION_UP) {
+                hideKeyboardAndClearAddressFocus();
+                return true;
+            }
+            return super.onKeyPreIme(keyCode, event);
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -147,7 +163,7 @@ public class TvActivity extends Activity {
         logoLp.setMargins(0, 0, dp(4), 0);
         logo.setLayoutParams(logoLp);
 
-        addressBar = new EditText(this);
+        addressBar = new TvEditText(this);
         addressBar.setSingleLine(true);
         addressBar.setHint("Enter address or search");
         addressBar.setTextSize(18);
