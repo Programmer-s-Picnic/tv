@@ -424,7 +424,17 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private int currentVersionCode() {\n        try {\n            android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);\n            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) return (int) info.getLongVersionCode();\n            return info.versionCode;\n        } catch (Exception e) {\n            return 0;\n        }\n    }\n\n    private void downloadAndInstallUpdate(String apkUrl) {
+    private int currentVersionCode() {
+        try {
+            android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) return (int) info.getLongVersionCode();
+            return info.versionCode;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private void downloadAndInstallUpdate(String apkUrl) {
         try {
             HttpURLConnection c = (HttpURLConnection) new URL(apkUrl).openConnection();
             c.setConnectTimeout(8000);
