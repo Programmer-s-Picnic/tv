@@ -6,6 +6,7 @@ import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -99,6 +100,27 @@ public class TvActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
+    private GradientDrawable roundedBackground(int fill, int stroke, int radiusDp) {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(fill);
+        bg.setCornerRadius(dp(radiusDp));
+        if (stroke != Color.TRANSPARENT) bg.setStroke(dp(1), stroke);
+        return bg;
+    }
+
+    private void stylePrimary(Button b) {
+        b.setTextColor(Color.WHITE);
+        b.setTypeface(null, android.graphics.Typeface.BOLD);
+        b.setBackground(roundedBackground(Color.rgb(9, 105, 218), Color.rgb(9, 105, 218), 12));
+        b.setPadding(dp(15), 0, dp(15), 0);
+    }
+
+    private void styleSecondary(Button b) {
+        b.setTextColor(Color.rgb(18, 55, 105));
+        b.setBackground(roundedBackground(Color.WHITE, Color.rgb(188, 214, 238), 12));
+        b.setPadding(dp(14), 0, dp(14), 0);
+    }
+
     private void hideKeyboardAndClearAddressFocus() {
         try {
             InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
@@ -136,6 +158,8 @@ public class TvActivity extends Activity {
         b.setTextSize(16);
         b.setMinHeight(dp(50));
         b.setFocusable(false);
+        b.setAllCaps(false);
+        styleSecondary(b);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, dp(50));
         lp.setMargins(dp(3), 0, dp(3), 0);
@@ -145,7 +169,7 @@ public class TvActivity extends Activity {
 
     private void buildUi() {
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.rgb(232, 244, 255));
+        root.setBackgroundColor(Color.rgb(246, 250, 255));
 
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
@@ -154,7 +178,7 @@ public class TvActivity extends Activity {
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
         top.setPadding(dp(8), dp(6), dp(8), dp(6));
-        top.setBackgroundColor(Color.rgb(225, 240, 255));
+        top.setBackgroundColor(Color.rgb(243, 249, 255));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.drawable.champak_logo);
@@ -168,8 +192,10 @@ public class TvActivity extends Activity {
         addressBar.setHint("Enter address or search");
         addressBar.setTextSize(18);
         addressBar.setImeOptions(EditorInfo.IME_ACTION_GO);
-        addressBar.setPadding(dp(12), 0, dp(12), 0);
-        addressBar.setBackgroundColor(Color.WHITE);
+        addressBar.setPadding(dp(15), 0, dp(15), 0);
+        addressBar.setTextColor(Color.rgb(25, 45, 65));
+        addressBar.setHintTextColor(Color.rgb(105, 125, 145));
+        addressBar.setBackground(roundedBackground(Color.WHITE, Color.rgb(165, 198, 228), 14));
         LinearLayout.LayoutParams addressLp = new LinearLayout.LayoutParams(0, dp(50), 1f);
         addressLp.setMargins(dp(6), 0, dp(6), 0);
         addressBar.setLayoutParams(addressLp);
@@ -184,6 +210,7 @@ public class TvActivity extends Activity {
         });
 
         Button go = button("Go");
+        stylePrimary(go);
         go.setOnClickListener(v -> {
             loadFromAddressBar();
             hideKeyboardAndClearAddressFocus();
@@ -210,7 +237,7 @@ public class TvActivity extends Activity {
 
         HorizontalScrollView tabScroll = new HorizontalScrollView(this);
         tabScroll.setHorizontalScrollBarEnabled(false);
-        tabScroll.setBackgroundColor(Color.rgb(211, 232, 252));
+        tabScroll.setBackgroundColor(Color.rgb(235, 246, 255));
         tabStrip = new LinearLayout(this);
         tabStrip.setOrientation(LinearLayout.HORIZONTAL);
         tabStrip.setPadding(dp(8), dp(4), dp(8), dp(4));
@@ -232,8 +259,8 @@ public class TvActivity extends Activity {
         pointer = new TextView(this);
         pointer.setText("➤");
         pointer.setTextSize(38);
-        pointer.setTextColor(Color.WHITE);
-        pointer.setShadowLayer(6, 2, 2, Color.BLACK);
+        pointer.setTextColor(Color.rgb(255, 179, 0));
+        pointer.setShadowLayer(7, 2, 2, Color.BLACK);
         pointer.setGravity(Gravity.CENTER);
         pointer.setFocusable(false);
         pointer.setClickable(false);
@@ -318,7 +345,13 @@ public class TvActivity extends Activity {
         activeTab = tab;
         for (BrowserTab t : tabs) {
             t.webView.setVisibility(t == tab ? View.VISIBLE : View.GONE);
-            t.tabButton.setAlpha(t == tab ? 1f : 0.65f);
+            t.tabButton.setAlpha(t == tab ? 1f : 0.78f);
+            if (t == tab) {
+                t.tabButton.setTextColor(Color.WHITE);
+                t.tabButton.setBackground(roundedBackground(Color.rgb(9, 105, 218), Color.rgb(9, 105, 218), 11));
+            } else {
+                styleSecondary(t.tabButton);
+            }
         }
         String url = tab.webView.getUrl();
         addressBar.setText(url == null || url.startsWith("data:") ? "" : url);
@@ -338,11 +371,13 @@ public class TvActivity extends Activity {
 
     private void showStartPage(WebView web) {
         String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
-                + "<style>body{font-family:sans-serif;background:#edf7ff;color:#17365d;text-align:center;padding:10vh 4vw}"
-                + "h1{font-size:7vh;margin:0 0 2vh}p{font-size:3vh}.box{display:inline-block;padding:4vh 5vw;"
-                + "background:#fff;border:3px solid #4aa3ff;border-radius:22px;font-size:3.2vh}</style></head>"
-                + "<body><h1>Champak TV Browser</h1><p>Use the remote arrows to move the pointer.</p>"
-                + "<div class='box'>Move pointer • Press OK to click</div></body></html>";
+                + "<style>body{font-family:sans-serif;background:linear-gradient(135deg,#edf7ff,#ffffff);color:#17365d;text-align:center;padding:9vh 4vw}"
+                + "h1{font-size:7vh;margin:0 0 1.5vh}p{font-size:2.8vh;color:#4c6780}.box{display:inline-block;padding:3.5vh 4.5vw;"
+                + "background:#fff;border:2px solid #9ecbf3;border-radius:24px;font-size:3vh;box-shadow:0 12px 34px rgba(30,80,130,.12)}"
+                + ".hint{margin-top:2.5vh;font-size:2.2vh;color:#6a8094}</style></head>"
+                + "<body><h1>Champak TV Browser</h1><p>Simple browsing designed for your TV remote.</p>"
+                + "<div class='box'>Move pointer • Press OK to click</div>"
+                + "<div class='hint'>Back closes the keyboard first • D-pad Down returns to browsing</div></body></html>";
         web.loadDataWithBaseURL("https://start.learnwithchampak.live/", html, "text/html", "UTF-8", null);
         addressBar.setText("");
     }
