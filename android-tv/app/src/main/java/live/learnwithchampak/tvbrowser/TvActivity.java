@@ -6,10 +6,12 @@ import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.Bitmap;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.speech.RecognizerIntent;
 import android.os.Environment;
 import android.provider.Settings;
 import android.view.Gravity;
@@ -45,7 +47,12 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.List;
+
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.common.BitMatrix;
 
 public class TvActivity extends Activity {
     private static final String UPDATE_INFO =
@@ -56,7 +63,14 @@ public class TvActivity extends Activity {
     private FrameLayout webContainer;
     private EditText addressBar;
     private TextView pointer;
+    private LinearLayout topBar;
+    private LinearLayout actionBar;
+    private HorizontalScrollView tabScroll;
+    private Button modeButton;
     private BrowserTab activeTab;
+    private boolean focusMode = false;
+    private boolean fullScreen = false;
+    private static final int VOICE_REQUEST = 7101;
     private float pointerX = 500;
     private float pointerY = 300;
 
@@ -174,11 +188,11 @@ public class TvActivity extends Activity {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
 
-        LinearLayout top = new LinearLayout(this);
-        top.setOrientation(LinearLayout.HORIZONTAL);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(dp(8), dp(6), dp(8), dp(6));
-        top.setBackgroundColor(Color.rgb(243, 249, 255));
+        topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setPadding(dp(8), dp(6), dp(8), dp(6));
+        topBar.setBackgroundColor(Color.rgb(243, 249, 255));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.drawable.champak_logo);
@@ -221,21 +235,48 @@ public class TvActivity extends Activity {
             if (activeTab != null) activeTab.webView.reload();
         });
 
+        topBar.addView(logo);
+        topBar.addView(brandText());
+        topBar.addView(addressBar);
+        topBar.addView(go);
+        topBar.addView(reload);
+
+        actionBar = new LinearLayout(this);
+        actionBar.setOrientation(LinearLayout.HORIZONTAL);
+        actionBar.setGravity(Gravity.CENTER);
+        actionBar.setPadding(dp(8), dp(4), dp(8), dp(4));
+        actionBar.setBackgroundColor(Color.rgb(248, 252, 255));
+
+        Button home = button("Home");
+        home.setOnClickListener(v -> showStartPage(activeTab.webView));
+
+        modeButton = button("Pointer");
+        modeButton.setOnClickListener(v -> toggleNavigationMode());
+
+        Button voice = button("Voice");
+        voice.setOnClickListener(v -> startVoiceSearch());
+
+        Button full = button("Full Screen");
+        full.setOnClickListener(v -> setFullScreen(true));
+
+        Button qr = button("QR to Phone");
+        qr.setOnClickListener(v -> showQrForCurrentPage());
+
         Button newTab = button("+ New Tab");
         newTab.setOnClickListener(v -> newTab());
 
         Button closeAll = button("Close All Tabs");
         closeAll.setOnClickListener(v -> closeAllTabs());
 
-        top.addView(logo);
-        top.addView(brandText());
-        top.addView(addressBar);
-        top.addView(go);
-        top.addView(reload);
-        top.addView(newTab);
-        top.addView(closeAll);
+        actionBar.addView(home);
+        actionBar.addView(modeButton);
+        actionBar.addView(voice);
+        actionBar.addView(full);
+        actionBar.addView(qr);
+        actionBar.addView(newTab);
+        actionBar.addView(closeAll);
 
-        HorizontalScrollView tabScroll = new HorizontalScrollView(this);
+        tabScroll = new HorizontalScrollView(this);
         tabScroll.setHorizontalScrollBarEnabled(false);
         tabScroll.setBackgroundColor(Color.rgb(235, 246, 255));
         tabStrip = new LinearLayout(this);
@@ -249,7 +290,10 @@ public class TvActivity extends Activity {
         webContainer.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        page.addView(top);
+        page.addView(topBar, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(62)));
+        page.addView(actionBar, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(58)));
         page.addView(tabScroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
         page.addView(webContainer);
@@ -371,15 +415,134 @@ public class TvActivity extends Activity {
 
     private void showStartPage(WebView web) {
         String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
-                + "<style>body{font-family:sans-serif;background:linear-gradient(135deg,#edf7ff,#ffffff);color:#17365d;text-align:center;padding:9vh 4vw}"
-                + "h1{font-size:7vh;margin:0 0 1.5vh}p{font-size:2.8vh;color:#4c6780}.box{display:inline-block;padding:3.5vh 4.5vw;"
-                + "background:#fff;border:2px solid #9ecbf3;border-radius:24px;font-size:3vh;box-shadow:0 12px 34px rgba(30,80,130,.12)}"
-                + ".hint{margin-top:2.5vh;font-size:2.2vh;color:#6a8094}</style></head>"
-                + "<body><h1>Champak TV Browser</h1><p>Simple browsing designed for your TV remote.</p>"
-                + "<div class='box'>Move pointer • Press OK to click</div>"
-                + "<div class='hint'>Back closes the keyboard first • D-pad Down returns to browsing</div></body></html>";
+                + "<style>body{font-family:sans-serif;background:linear-gradient(135deg,#edf7ff,#ffffff);color:#17365d;text-align:center;padding:6vh 4vw;margin:0}"
+                + "h1{font-size:6vh;margin:0 0 1vh}.sub{font-size:2.5vh;color:#56738d;margin-bottom:4vh}"
+                + ".grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2.3vh 2vw;max-width:78vw;margin:auto}"
+                + ".tile{display:flex;align-items:center;justify-content:center;min-height:12vh;background:#fff;border:2px solid #b8daf6;border-radius:22px;"
+                + "font-size:2.7vh;font-weight:700;color:#0b5fae;text-decoration:none;box-shadow:0 8px 24px rgba(30,80,130,.10)}"
+                + ".tile:focus{outline:5px solid #0969da;transform:scale(1.04)}"
+                + ".hint{margin-top:3vh;font-size:2.1vh;color:#6a8094}</style></head>"
+                + "<body><h1>Champak TV Browser</h1><div class='sub'>Choose a favourite or search above</div>"
+                + "<div class='grid'>"
+                + "<a class='tile' href='https://www.google.com'>Google</a>"
+                + "<a class='tile' href='https://www.youtube.com'>YouTube</a>"
+                + "<a class='tile' href='https://www.learnwithchampak.live'>Learn With Champak</a>"
+                + "<a class='tile' href='https://dsa.learnwithchampak.live'>DSA</a>"
+                + "<a class='tile' href='https://aiml.learnwithchampak.live'>AI / ML</a>"
+                + "<a class='tile' href='https://programmer-s-picnic.github.io'>Programmers Picnic</a>"
+                + "</div><div class='hint'>Pointer mode for free movement • Focus mode for D-pad navigation</div></body></html>";
         web.loadDataWithBaseURL("https://start.learnwithchampak.live/", html, "text/html", "UTF-8", null);
         addressBar.setText("");
+    }
+
+    private void toggleNavigationMode() {
+        focusMode = !focusMode;
+        if (modeButton != null) modeButton.setText(focusMode ? "Focus" : "Pointer");
+        if (pointer != null) pointer.setVisibility(focusMode ? View.GONE : View.VISIBLE);
+        if (activeTab != null) {
+            activeTab.webView.requestFocus();
+            if (focusMode) {
+                activeTab.webView.evaluateJavascript(
+                        "(function(){window.__champakFocus=0;var e=[...document.querySelectorAll('a,button,input,select,textarea,[tabindex]')].filter(x=>!x.disabled&&x.offsetParent!==null);"
+                        + "if(e.length){e[0].focus();e[0].scrollIntoView({block:'center'});}})();", null);
+            }
+        }
+        Toast.makeText(this, focusMode ? "Focus mode" : "Pointer mode", Toast.LENGTH_SHORT).show();
+    }
+
+    private void moveFocus(int direction) {
+        if (activeTab == null) return;
+        String js = "(function(){var e=[...document.querySelectorAll('a,button,input,select,textarea,[tabindex]')].filter(x=>!x.disabled&&x.offsetParent!==null);"
+                + "if(!e.length)return;window.__champakFocus=(window.__champakFocus||0)+" + direction + ";"
+                + "if(window.__champakFocus<0)window.__champakFocus=e.length-1;if(window.__champakFocus>=e.length)window.__champakFocus=0;"
+                + "e[window.__champakFocus].focus();e[window.__champakFocus].scrollIntoView({block:'center',behavior:'smooth'});})();";
+        activeTab.webView.evaluateJavascript(js, null);
+    }
+
+    private void clickFocused() {
+        if (activeTab == null) return;
+        activeTab.webView.evaluateJavascript(
+                "(function(){var e=document.activeElement;if(e&&e!==document.body){e.click();}})();", null);
+    }
+
+    private void startVoiceSearch() {
+        try {
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak a website or search");
+            startActivityForResult(intent, VOICE_REQUEST);
+        } catch (Exception e) {
+            Toast.makeText(this, "Voice search is not available on this TV", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == VOICE_REQUEST && resultCode == RESULT_OK && data != null) {
+            ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+            if (results != null && !results.isEmpty()) {
+                addressBar.setText(results.get(0));
+                loadUrl(results.get(0));
+                hideKeyboardAndClearAddressFocus();
+            }
+        }
+    }
+
+    private void setFullScreen(boolean enabled) {
+        fullScreen = enabled;
+        int visibility = enabled ? View.GONE : View.VISIBLE;
+        if (topBar != null) topBar.setVisibility(visibility);
+        if (actionBar != null) actionBar.setVisibility(visibility);
+        if (tabScroll != null) tabScroll.setVisibility(visibility);
+        if (enabled) {
+            Toast.makeText(this, "Full screen — press Back to restore controls", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showQrForCurrentPage() {
+        if (activeTab == null) return;
+        String url = activeTab.webView.getUrl();
+        if (url == null || url.startsWith("data:")) {
+            Toast.makeText(this, "Open a webpage first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            int size = dp(320);
+            BitMatrix matrix = new MultiFormatWriter().encode(url, BarcodeFormat.QR_CODE, size, size);
+            Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565);
+            for (int y = 0; y < size; y++) {
+                for (int x = 0; x < size; x++) {
+                    bitmap.setPixel(x, y, matrix.get(x, y) ? Color.BLACK : Color.WHITE);
+                }
+            }
+            LinearLayout box = new LinearLayout(this);
+            box.setOrientation(LinearLayout.VERTICAL);
+            box.setGravity(Gravity.CENTER);
+            box.setPadding(dp(20), dp(20), dp(20), dp(20));
+
+            ImageView image = new ImageView(this);
+            image.setImageBitmap(bitmap);
+            image.setAdjustViewBounds(true);
+            box.addView(image, new LinearLayout.LayoutParams(size, size));
+
+            TextView label = new TextView(this);
+            label.setText("Scan with your phone\n" + url);
+            label.setTextSize(16);
+            label.setTextColor(Color.rgb(35, 55, 75));
+            label.setGravity(Gravity.CENTER);
+            label.setPadding(0, dp(14), 0, 0);
+            box.addView(label);
+
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Open on Phone")
+                    .setView(box)
+                    .setPositiveButton("Close", null)
+                    .show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not create QR code", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void loadFromAddressBar() {
@@ -405,31 +568,56 @@ public class TvActivity extends Activity {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            float step = dp(28);
-            switch (event.getKeyCode()) {
-                case KeyEvent.KEYCODE_BACK:
-                    if (addressBar != null && addressBar.hasFocus()) {
-                        hideKeyboardAndClearAddressFocus();
-                        return true;
-                    }
-                    if (activeTab != null && activeTab.webView.canGoBack()) {
-                        activeTab.webView.goBack();
-                        return true;
-                    }
-                    break;
-                case KeyEvent.KEYCODE_DPAD_LEFT:
-                    pointerX -= step; clampPointer(); updatePointer(); return true;
-                case KeyEvent.KEYCODE_DPAD_RIGHT:
-                    pointerX += step; clampPointer(); updatePointer(); return true;
-                case KeyEvent.KEYCODE_DPAD_UP:
-                    pointerY -= step; clampPointer(); updatePointer(); return true;
-                case KeyEvent.KEYCODE_DPAD_DOWN:
-                    pointerY += step; clampPointer(); updatePointer(); return true;
-                case KeyEvent.KEYCODE_DPAD_CENTER:
-                case KeyEvent.KEYCODE_ENTER:
-                case KeyEvent.KEYCODE_BUTTON_A:
-                    clickPointer();
+            int key = event.getKeyCode();
+
+            if (key == KeyEvent.KEYCODE_BACK) {
+                if (addressBar != null && addressBar.hasFocus()) {
+                    hideKeyboardAndClearAddressFocus();
                     return true;
+                }
+                if (fullScreen) {
+                    setFullScreen(false);
+                    return true;
+                }
+                if (activeTab != null && activeTab.webView.canGoBack()) {
+                    activeTab.webView.goBack();
+                    return true;
+                }
+            }
+
+            if (addressBar != null && addressBar.hasFocus()) {
+                return super.dispatchKeyEvent(event);
+            }
+
+            if (focusMode) {
+                switch (key) {
+                    case KeyEvent.KEYCODE_DPAD_LEFT:
+                    case KeyEvent.KEYCODE_DPAD_UP:
+                        moveFocus(-1); return true;
+                    case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    case KeyEvent.KEYCODE_DPAD_DOWN:
+                        moveFocus(1); return true;
+                    case KeyEvent.KEYCODE_DPAD_CENTER:
+                    case KeyEvent.KEYCODE_ENTER:
+                    case KeyEvent.KEYCODE_BUTTON_A:
+                        clickFocused(); return true;
+                }
+            } else {
+                float step = dp(28);
+                switch (key) {
+                    case KeyEvent.KEYCODE_DPAD_LEFT:
+                        pointerX -= step; clampPointer(); updatePointer(); return true;
+                    case KeyEvent.KEYCODE_DPAD_RIGHT:
+                        pointerX += step; clampPointer(); updatePointer(); return true;
+                    case KeyEvent.KEYCODE_DPAD_UP:
+                        pointerY -= step; clampPointer(); updatePointer(); return true;
+                    case KeyEvent.KEYCODE_DPAD_DOWN:
+                        pointerY += step; clampPointer(); updatePointer(); return true;
+                    case KeyEvent.KEYCODE_DPAD_CENTER:
+                    case KeyEvent.KEYCODE_ENTER:
+                    case KeyEvent.KEYCODE_BUTTON_A:
+                        clickPointer(); return true;
+                }
             }
         }
         return super.dispatchKeyEvent(event);
