@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -95,6 +96,27 @@ public class MainActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
+    private GradientDrawable roundedBackground(int fill, int stroke, int radiusDp) {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(fill);
+        bg.setCornerRadius(dp(radiusDp));
+        if (stroke != Color.TRANSPARENT) bg.setStroke(dp(1), stroke);
+        return bg;
+    }
+
+    private void stylePrimary(Button b) {
+        b.setTextColor(Color.WHITE);
+        b.setTypeface(null, android.graphics.Typeface.BOLD);
+        b.setBackground(roundedBackground(Color.rgb(9, 105, 218), Color.rgb(9, 105, 218), 12));
+        b.setPadding(dp(14), 0, dp(14), 0);
+    }
+
+    private void styleSecondary(Button b) {
+        b.setTextColor(Color.rgb(18, 55, 105));
+        b.setBackground(roundedBackground(Color.WHITE, Color.rgb(190, 215, 238), 12));
+        b.setPadding(dp(12), 0, dp(12), 0);
+    }
+
     private TextView brandText(float size) {
         TextView text = new TextView(this);
         text.setText("Champak Roy");
@@ -113,6 +135,7 @@ public class MainActivity extends Activity {
         b.setMinHeight(dp(height));
         b.setAllCaps(false);
         b.setFocusable(tvMode);
+        styleSecondary(b);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, dp(height));
         lp.setMargins(dp(3), 0, dp(3), 0);
@@ -134,8 +157,10 @@ public class MainActivity extends Activity {
         addressBar.setHint("Search or enter address");
         addressBar.setTextSize(size);
         addressBar.setImeOptions(EditorInfo.IME_ACTION_GO);
-        addressBar.setPadding(dp(12), 0, dp(12), 0);
-        addressBar.setBackgroundColor(Color.WHITE);
+        addressBar.setPadding(dp(14), 0, dp(14), 0);
+        addressBar.setTextColor(Color.rgb(25, 45, 65));
+        addressBar.setHintTextColor(Color.rgb(110, 130, 150));
+        addressBar.setBackground(roundedBackground(Color.WHITE, Color.rgb(175, 205, 232), 14));
         addressBar.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_GO ||
                     (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
@@ -163,7 +188,7 @@ public class MainActivity extends Activity {
         brandRow.setOrientation(LinearLayout.HORIZONTAL);
         brandRow.setGravity(Gravity.CENTER_VERTICAL);
         brandRow.setPadding(dp(10), dp(5), dp(10), dp(2));
-        brandRow.setBackgroundColor(Color.rgb(225, 240, 255));
+        brandRow.setBackgroundColor(Color.rgb(243, 249, 255));
         brandRow.addView(logo(34));
         brandRow.addView(brandText(18));
 
@@ -178,12 +203,13 @@ public class MainActivity extends Activity {
         addressRow.setOrientation(LinearLayout.HORIZONTAL);
         addressRow.setGravity(Gravity.CENTER_VERTICAL);
         addressRow.setPadding(dp(8), dp(4), dp(8), dp(5));
-        addressRow.setBackgroundColor(Color.rgb(225, 240, 255));
+        addressRow.setBackgroundColor(Color.rgb(243, 249, 255));
 
         configureAddressBar(46, 16);
         addressRow.addView(addressBar, new LinearLayout.LayoutParams(0, dp(46), 1f));
 
         Button go = button("Go", 46, 14);
+        stylePrimary(go);
         go.setOnClickListener(v -> loadFromAddressBar());
         Button reload = button("↻", 46, 22);
         reload.setContentDescription("Reload");
@@ -203,7 +229,7 @@ public class MainActivity extends Activity {
         bottom.setOrientation(LinearLayout.HORIZONTAL);
         bottom.setGravity(Gravity.CENTER);
         bottom.setPadding(dp(6), dp(4), dp(6), dp(4));
-        bottom.setBackgroundColor(Color.rgb(235, 246, 255));
+        bottom.setBackgroundColor(Color.rgb(248, 252, 255));
 
         Button back = button("‹", 50, 26);
         back.setContentDescription("Back");
@@ -242,7 +268,7 @@ public class MainActivity extends Activity {
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
         top.setPadding(dp(8), dp(5), dp(8), dp(5));
-        top.setBackgroundColor(Color.rgb(225, 240, 255));
+        top.setBackgroundColor(Color.rgb(243, 249, 255));
         top.addView(logo(40));
         top.addView(brandText(18));
 
@@ -250,6 +276,7 @@ public class MainActivity extends Activity {
         top.addView(addressBar, new LinearLayout.LayoutParams(0, dp(48), 1f));
 
         Button go = button("Go", 48, 15);
+        stylePrimary(go);
         go.setOnClickListener(v -> loadFromAddressBar());
         Button reload = button("Reload", 48, 15);
         reload.setOnClickListener(v -> { if (activeTab != null) activeTab.webView.reload(); });
@@ -267,7 +294,7 @@ public class MainActivity extends Activity {
         LinearLayout bottom = new LinearLayout(this);
         bottom.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         bottom.setPadding(dp(8), dp(2), dp(8), dp(2));
-        bottom.setBackgroundColor(Color.rgb(235, 246, 255));
+        bottom.setBackgroundColor(Color.rgb(248, 252, 255));
         Button closeAll = button("Close All Tabs", 44, 14);
         closeAll.setOnClickListener(v -> closeAllTabs());
         bottom.addView(closeAll);
@@ -292,7 +319,7 @@ public class MainActivity extends Activity {
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
         top.setPadding(dp(8), dp(6), dp(8), dp(6));
-        top.setBackgroundColor(Color.rgb(225, 240, 255));
+        top.setBackgroundColor(Color.rgb(243, 249, 255));
 
         top.addView(logo(48));
         top.addView(brandText(20));
@@ -328,8 +355,8 @@ public class MainActivity extends Activity {
         pointer = new TextView(this);
         pointer.setText("➤");
         pointer.setTextSize(38);
-        pointer.setTextColor(Color.WHITE);
-        pointer.setShadowLayer(6, 2, 2, Color.BLACK);
+        pointer.setTextColor(Color.rgb(255, 179, 0));
+        pointer.setShadowLayer(7, 2, 2, Color.BLACK);
         pointer.setGravity(Gravity.CENTER);
         pointer.setFocusable(false);
         pointer.setClickable(false);
@@ -347,7 +374,7 @@ public class MainActivity extends Activity {
     private HorizontalScrollView createTabStrip() {
         HorizontalScrollView tabScroll = new HorizontalScrollView(this);
         tabScroll.setHorizontalScrollBarEnabled(false);
-        tabScroll.setBackgroundColor(Color.rgb(211, 232, 252));
+        tabScroll.setBackgroundColor(Color.rgb(235, 246, 255));
         tabStrip = new LinearLayout(this);
         tabStrip.setOrientation(LinearLayout.HORIZONTAL);
         tabStrip.setPadding(dp(8), dp(4), dp(8), dp(4));
@@ -432,7 +459,15 @@ public class MainActivity extends Activity {
         activeTab = tab;
         for (BrowserTab t : tabs) {
             t.webView.setVisibility(t == tab ? View.VISIBLE : View.GONE);
-            if (t.tabButton != null) t.tabButton.setAlpha(t == tab ? 1f : 0.65f);
+            if (t.tabButton != null) {
+                t.tabButton.setAlpha(t == tab ? 1f : 0.78f);
+                if (t == tab) {
+                    t.tabButton.setTextColor(Color.WHITE);
+                    t.tabButton.setBackground(roundedBackground(Color.rgb(9, 105, 218), Color.rgb(9, 105, 218), 11));
+                } else {
+                    styleSecondary(t.tabButton);
+                }
+            }
         }
         String url = tab.webView.getUrl();
         addressBar.setText(url == null || url.startsWith("data:") ? "" : url);
