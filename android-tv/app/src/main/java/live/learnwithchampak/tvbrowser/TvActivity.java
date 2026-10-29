@@ -22,9 +22,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
+import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
+import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
@@ -118,7 +120,7 @@ public class TvActivity extends Activity {
         focusMode = prefs.getBoolean("focus_default", true);
         pointerSpeed = prefs.getInt("pointer_speed", 28);
         buildUi();
-        newTab();
+        restoreTabsOrNew();
         updateModeUi();
 
         Uri incoming = getIntent() == null ? null : getIntent().getData();
@@ -356,8 +358,17 @@ public class TvActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         s.setMediaPlaybackRequiresUserGesture(false);
+        s.setDefaultFontSize(prefs == null ? 16 : prefs.getInt("text_size", 16));
 
         web.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                if (loadingBar != null && tab == activeTab) {
+                    loadingBar.setProgress(8);
+                    loadingBar.setVisibility(View.VISIBLE);
+                }
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String scheme = request.getUrl().getScheme();
@@ -366,14 +377,33 @@ public class TvActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (tab == activeTab) addressBar.setText(url);
-                if (focusMode && tab == activeTab) {
-                    installTvFocusMode(true);
+                if (tab == activeTab) {
+                    addressBar.setText(url != null && url.startsWith("data:") ? "" : url);
+                    if (loadingBar != null) loadingBar.setVisibility(View.GONE);
+                }
+                recordRecentUrl(url);
+                if (focusMode && tab == activeTab) installTvFocusMode(true);
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request,
+                                        android.webkit.WebResourceError error) {
+                if (request != null && request.isForMainFrame()) {
+                    if (loadingBar != null) loadingBar.setVisibility(View.GONE);
+                    showErrorPage(view);
                 }
             }
         });
 
         web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onProgressChanged(WebView view, int newProgress) {
+                if (tab == activeTab && loadingBar != null) {
+                    loadingBar.setProgress(newProgress);
+                    loadingBar.setVisibility(newProgress >= 100 ? View.GONE : View.VISIBLE);
+                }
+            }
+
             @Override
             public void onReceivedTitle(WebView view, String title) {
                 if (title == null || title.trim().isEmpty()) title = "Tab";
@@ -400,6 +430,10 @@ public class TvActivity extends Activity {
         activeTab = tab;
         for (BrowserTab t : tabs) {
             t.webView.setVisibility(t == tab ? View.VISIBLE : View.GONE);
+            if (t == tab) {
+                t.webView.setAlpha(0.82f);
+                t.webView.animate().alpha(1f).setDuration(140).start();
+            }
             t.tabButton.setAlpha(t == tab ? 1f : 0.78f);
             if (t == tab) {
                 t.tabButton.setTextColor(Color.WHITE);
