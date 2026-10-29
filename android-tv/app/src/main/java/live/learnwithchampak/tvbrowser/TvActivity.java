@@ -250,7 +250,7 @@ public class TvActivity extends Activity {
         Button home = button("Home");
         home.setOnClickListener(v -> showStartPage(activeTab.webView));
 
-        modeButton = button("Pointer");
+        modeButton = button("Pointer Mode");
         modeButton.setOnClickListener(v -> toggleNavigationMode());
 
         Button voice = button("Voice");
@@ -359,6 +359,9 @@ public class TvActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 if (tab == activeTab) addressBar.setText(url);
+                if (focusMode && tab == activeTab) {
+                    installTvFocusMode(true);
+                }
             }
         });
 
@@ -437,32 +440,93 @@ public class TvActivity extends Activity {
 
     private void toggleNavigationMode() {
         focusMode = !focusMode;
-        if (modeButton != null) modeButton.setText(focusMode ? "Focus" : "Pointer");
+        if (modeButton != null) {
+            modeButton.setText(focusMode ? "Focus Mode" : "Pointer Mode");
+            if (focusMode) stylePrimary(modeButton);
+            else styleSecondary(modeButton);
+        }
         if (pointer != null) pointer.setVisibility(focusMode ? View.GONE : View.VISIBLE);
+
         if (activeTab != null) {
             activeTab.webView.requestFocus();
-            if (focusMode) {
-                activeTab.webView.evaluateJavascript(
-                        "(function(){window.__champakFocus=0;var e=[...document.querySelectorAll('a,button,input,select,textarea,[tabindex]')].filter(x=>!x.disabled&&x.offsetParent!==null);"
-                        + "if(e.length){e[0].focus();e[0].scrollIntoView({block:'center'});}})();", null);
-            }
+            installTvFocusMode(focusMode);
         }
-        Toast.makeText(this, focusMode ? "Focus mode" : "Pointer mode", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this,
+                focusMode ? "TV Focus Mode — use D-pad and OK"
+                          : "Pointer Mode — move pointer with D-pad",
+                Toast.LENGTH_SHORT).show();
     }
 
-    private void moveFocus(int direction) {
+    private void installTvFocusMode(boolean enabled) {
         if (activeTab == null) return;
-        String js = "(function(){var e=[...document.querySelectorAll('a,button,input,select,textarea,[tabindex]')].filter(x=>!x.disabled&&x.offsetParent!==null);"
-                + "if(!e.length)return;window.__champakFocus=(window.__champakFocus||0)+" + direction + ";"
-                + "if(window.__champakFocus<0)window.__champakFocus=e.length-1;if(window.__champakFocus>=e.length)window.__champakFocus=0;"
-                + "e[window.__champakFocus].focus();e[window.__champakFocus].scrollIntoView({block:'center',behavior:'smooth'});})();";
+
+        if (!enabled) {
+            activeTab.webView.evaluateJavascript(
+                    "(function(){"
+                    + "var s=document.getElementById('__champak_tv_focus_style');if(s)s.remove();"
+                    + "var old=document.querySelectorAll('.__champak_tv_focused');"
+                    + "old.forEach(function(x){x.classList.remove('__champak_tv_focused');});"
+                    + "})();", null);
+            return;
+        }
+
+        String js = "(function(){"
+                + "if(!document.getElementById('__champak_tv_focus_style')){"
+                + "var s=document.createElement('style');s.id='__champak_tv_focus_style';"
+                + "s.textContent='.__champak_tv_focused{outline:6px solid #ffb300 !important;outline-offset:5px !important;"
+                + "box-shadow:0 0 0 4px rgba(9,105,218,.55) !important;border-radius:8px !important;"
+                + "transform:scale(1.025) !important;transition:transform .12s ease,outline .12s ease !important;}';"
+                + "document.head.appendChild(s);}"
+                + "window.__champakTvElements=function(){return [...document.querySelectorAll("
+                + "'a[href],button,input,select,textarea,[role=button],[onclick],[tabindex]')].filter(function(e){"
+                + "var r=e.getBoundingClientRect();var cs=getComputedStyle(e);"
+                + "return !e.disabled&&r.width>1&&r.height>1&&cs.visibility!=='hidden'&&cs.display!=='none';});};"
+                + "window.__champakTvSetFocus=function(el){"
+                + "document.querySelectorAll('.__champak_tv_focused').forEach(function(x){x.classList.remove('__champak_tv_focused');});"
+                + "if(!el)return;el.classList.add('__champak_tv_focused');try{el.focus({preventScroll:true});}catch(e){el.focus();}"
+                + "el.scrollIntoView({block:'center',inline:'center',behavior:'smooth'});window.__champakTvCurrent=el;};"
+                + "var es=window.__champakTvElements();var cur=window.__champakTvCurrent;"
+                + "if(!cur||!document.contains(cur)||!es.includes(cur)){window.__champakTvSetFocus(es[0]);}"
+                + "})();";
+        activeTab.webView.evaluateJavascript(js, null);
+    }
+
+    private void moveFocus(int directionKey) {
+        if (activeTab == null) return;
+
+        String dir;
+        switch (directionKey) {
+            case KeyEvent.KEYCODE_DPAD_LEFT: dir = "left"; break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT: dir = "right"; break;
+            case KeyEvent.KEYCODE_DPAD_UP: dir = "up"; break;
+            default: dir = "down"; break;
+        }
+
+        String js = "(function(){"
+                + "if(!window.__champakTvElements||!window.__champakTvSetFocus)return;"
+                + "var es=window.__champakTvElements();if(!es.length)return;"
+                + "var cur=window.__champakTvCurrent;if(!cur||!document.contains(cur)){window.__champakTvSetFocus(es[0]);return;}"
+                + "var r=cur.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;"
+                + "var best=null,bestScore=1e20,dir='" + dir + "';"
+                + "es.forEach(function(e){if(e===cur)return;var q=e.getBoundingClientRect(),x=q.left+q.width/2,y=q.top+q.height/2;"
+                + "var dx=x-cx,dy=y-cy,primary=0,secondary=0,ok=false;"
+                + "if(dir==='left'&&dx<0){ok=true;primary=-dx;secondary=Math.abs(dy);}"
+                + "if(dir==='right'&&dx>0){ok=true;primary=dx;secondary=Math.abs(dy);}"
+                + "if(dir==='up'&&dy<0){ok=true;primary=-dy;secondary=Math.abs(dx);}"
+                + "if(dir==='down'&&dy>0){ok=true;primary=dy;secondary=Math.abs(dx);}"
+                + "if(!ok)return;var score=primary+secondary*2.2;if(score<bestScore){bestScore=score;best=e;}});"
+                + "if(best)window.__champakTvSetFocus(best);"
+                + "})();";
         activeTab.webView.evaluateJavascript(js, null);
     }
 
     private void clickFocused() {
         if (activeTab == null) return;
         activeTab.webView.evaluateJavascript(
-                "(function(){var e=document.activeElement;if(e&&e!==document.body){e.click();}})();", null);
+                "(function(){var e=window.__champakTvCurrent||document.activeElement;"
+                + "if(!e||e===document.body)return;"
+                + "if(e.tagName==='INPUT'||e.tagName==='TEXTAREA'||e.tagName==='SELECT'){e.focus();e.click();}"
+                + "else{e.click();}})();", null);
     }
 
     private void startVoiceSearch() {
@@ -592,11 +656,10 @@ public class TvActivity extends Activity {
             if (focusMode) {
                 switch (key) {
                     case KeyEvent.KEYCODE_DPAD_LEFT:
-                    case KeyEvent.KEYCODE_DPAD_UP:
-                        moveFocus(-1); return true;
                     case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    case KeyEvent.KEYCODE_DPAD_UP:
                     case KeyEvent.KEYCODE_DPAD_DOWN:
-                        moveFocus(1); return true;
+                        moveFocus(key); return true;
                     case KeyEvent.KEYCODE_DPAD_CENTER:
                     case KeyEvent.KEYCODE_ENTER:
                     case KeyEvent.KEYCODE_BUTTON_A:
