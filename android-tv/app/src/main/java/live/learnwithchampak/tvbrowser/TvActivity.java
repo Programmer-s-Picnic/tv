@@ -5,6 +5,7 @@ import android.app.DownloadManager;
 import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.drawable.GradientDrawable;
@@ -32,6 +33,8 @@ import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -64,12 +67,23 @@ public class TvActivity extends Activity {
     private EditText addressBar;
     private TextView pointer;
     private LinearLayout topBar;
-    private LinearLayout actionBar;
     private HorizontalScrollView tabScroll;
     private Button modeButton;
+    private TextView statusBadge;
+    private ProgressBar loadingBar;
     private BrowserTab activeTab;
-    private boolean focusMode = false;
+    private boolean focusMode = true;
     private boolean fullScreen = false;
+    private boolean transientControls = false;
+    private SharedPreferences prefs;
+    private int pointerSpeed = 28;
+    private long lastPointerMove = 0L;
+    private int pointerRepeat = 0;
+    private final Runnable hidePointerRunnable = () -> {
+        if (!focusMode && pointer != null && System.currentTimeMillis() - lastPointerMove >= 2200) {
+            pointer.setVisibility(View.GONE);
+        }
+    };
     private static final int VOICE_REQUEST = 7101;
     private float pointerX = 500;
     private float pointerY = 300;
@@ -99,8 +113,12 @@ public class TvActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        prefs = getSharedPreferences("tv_browser", MODE_PRIVATE);
+        focusMode = prefs.getBoolean("focus_default", true);
+        pointerSpeed = prefs.getInt("pointer_speed", 28);
         buildUi();
         newTab();
+        updateModeUi();
 
         Uri incoming = getIntent() == null ? null : getIntent().getData();
         if (incoming != null) loadUrl(incoming.toString());
