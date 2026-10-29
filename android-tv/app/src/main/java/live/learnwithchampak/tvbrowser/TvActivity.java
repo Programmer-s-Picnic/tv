@@ -766,40 +766,36 @@ public class TvActivity extends Activity {
     private void showTvMenu() {
         String navigationLabel = focusMode ? "Switch to Pointer Mode" : "Switch to Focus Mode";
         String[] items = new String[] {
+                "Search",
                 "Home",
+                "Tabs",
                 "Voice Search",
                 navigationLabel,
+                "Bookmark Current Page",
                 "Full Screen",
                 "QR to Phone",
                 "New Tab",
-                "Close All Tabs"
+                "Close All Tabs",
+                "Settings"
         };
 
         new android.app.AlertDialog.Builder(this)
                 .setTitle("TV Menu")
                 .setItems(items, (dialog, which) -> {
                     switch (which) {
-                        case 0:
+                        case 0: showSearchOverlay(); break;
+                        case 1:
                             if (activeTab != null) showStartPage(activeTab.webView);
                             break;
-                        case 1:
-                            startVoiceSearch();
-                            break;
-                        case 2:
-                            toggleNavigationMode();
-                            break;
-                        case 3:
-                            setFullScreen(true);
-                            break;
-                        case 4:
-                            showQrForCurrentPage();
-                            break;
-                        case 5:
-                            newTab();
-                            break;
-                        case 6:
-                            closeAllTabs();
-                            break;
+                        case 2: showTabSwitcher(); break;
+                        case 3: startVoiceSearch(); break;
+                        case 4: toggleNavigationMode(); break;
+                        case 5: toggleBookmarkCurrent(); break;
+                        case 6: setFullScreen(true); break;
+                        case 7: showQrForCurrentPage(); break;
+                        case 8: newTab(); break;
+                        case 9: closeAllTabs(); break;
+                        case 10: showSettings(); break;
                     }
                 })
                 .setNegativeButton("Close", null)
@@ -807,29 +803,57 @@ public class TvActivity extends Activity {
     }
 
     private void showStartPage(WebView web) {
+        StringBuilder cards = new StringBuilder();
+        String last = prefs == null ? "" : prefs.getString("last_url", "");
+        if (!last.isEmpty()) {
+            cards.append("<a class='tile wide' href='").append(htmlEscape(last)).append("'>Continue: ")
+                    .append(htmlEscape(shortLabel(last))).append("</a>");
+        }
+
+        cards.append("<a class='tile' href='https://www.google.com'>Google</a>")
+                .append("<a class='tile' href='https://www.youtube.com'>YouTube</a>")
+                .append("<a class='tile' href='https://www.learnwithchampak.live'>Learn With Champak</a>")
+                .append("<a class='tile' href='https://dsa.learnwithchampak.live'>DSA</a>")
+                .append("<a class='tile' href='https://aiml.learnwithchampak.live'>AI / ML</a>")
+                .append("<a class='tile' href='https://programmer-s-picnic.github.io'>Programmers Picnic</a>");
+
+        String bookmarks = prefs == null ? "" : prefs.getString("bookmarks", "");
+        for (String u : bookmarks.split("\n")) {
+            if (!u.trim().isEmpty()) {
+                cards.append("<a class='tile bookmark' href='").append(htmlEscape(u)).append("'>★ ")
+                        .append(htmlEscape(shortLabel(u))).append("</a>");
+            }
+        }
+
+        String recent = prefs == null ? "" : prefs.getString("recent_urls", "");
+        int count = 0;
+        for (String u : recent.split("\n")) {
+            if (!u.trim().isEmpty() && count < 4) {
+                cards.append("<a class='tile recent' href='").append(htmlEscape(u)).append("'>Recent: ")
+                        .append(htmlEscape(shortLabel(u))).append("</a>");
+                count++;
+            }
+        }
+
         String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
-                + "<style>body{font-family:sans-serif;background:linear-gradient(135deg,#edf7ff,#ffffff);color:#17365d;text-align:center;padding:6vh 4vw;margin:0}"
-                + "h1{font-size:6vh;margin:0 0 1vh}.sub{font-size:2.5vh;color:#56738d;margin-bottom:4vh}"
-                + ".grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2.3vh 2vw;max-width:78vw;margin:auto}"
-                + ".tile{display:flex;align-items:center;justify-content:center;min-height:12vh;background:#fff;border:2px solid #b8daf6;border-radius:22px;"
-                + "font-size:2.7vh;font-weight:700;color:#0b5fae;text-decoration:none;box-shadow:0 8px 24px rgba(30,80,130,.10)}"
-                + ".tile:focus{outline:5px solid #0969da;transform:scale(1.04)}"
-                + ".hint{margin-top:3vh;font-size:2.1vh;color:#6a8094}</style></head>"
-                + "<body><h1>Champak TV Browser</h1><div class='sub'>Choose a favourite or search above</div>"
-                + "<div class='grid'>"
-                + "<a class='tile' href='https://www.google.com'>Google</a>"
-                + "<a class='tile' href='https://www.youtube.com'>YouTube</a>"
-                + "<a class='tile' href='https://www.learnwithchampak.live'>Learn With Champak</a>"
-                + "<a class='tile' href='https://dsa.learnwithchampak.live'>DSA</a>"
-                + "<a class='tile' href='https://aiml.learnwithchampak.live'>AI / ML</a>"
-                + "<a class='tile' href='https://programmer-s-picnic.github.io'>Programmers Picnic</a>"
-                + "</div><div class='hint'>Pointer mode for free movement • Focus mode for D-pad navigation</div></body></html>";
+                + "<style>body{font-family:sans-serif;background:linear-gradient(135deg,#edf7ff,#ffffff);color:#17365d;text-align:center;padding:5vh 4vw;margin:0}"
+                + "h1{font-size:5.5vh;margin:0 0 1vh}.sub{font-size:2.4vh;color:#56738d;margin-bottom:3vh}"
+                + ".grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2vh 1.6vw;max-width:86vw;margin:auto}"
+                + ".tile{display:flex;align-items:center;justify-content:center;min-height:10vh;background:#fff;border:2px solid #b8daf6;border-radius:20px;"
+                + "font-size:2.4vh;font-weight:700;color:#0b5fae;text-decoration:none;padding:1vh 1vw;box-shadow:0 8px 24px rgba(30,80,130,.09);transition:.14s}"
+                + ".wide{grid-column:span 3;background:#eaf5ff}.bookmark{border-color:#f2c45e}.recent{color:#416986}"
+                + ".tile:focus{outline:6px solid #ffb300;outline-offset:4px;transform:scale(1.035)}"
+                + ".hint{margin-top:2.5vh;font-size:2vh;color:#6a8094}</style></head>"
+                + "<body><h1>Champak TV Browser</h1><div class='sub'>Choose a site, or press TV Menu for Search and Voice</div>"
+                + "<div class='grid'>" + cards + "</div>"
+                + "<div class='hint'>Focus Mode is designed for D-pad navigation • Pointer Mode remains available for difficult pages</div></body></html>";
         web.loadDataWithBaseURL("https://start.learnwithchampak.live/", html, "text/html", "UTF-8", null);
         addressBar.setText("");
     }
 
     private void toggleNavigationMode() {
         focusMode = !focusMode;
+        if (prefs != null) prefs.edit().putBoolean("focus_default", focusMode).apply();
         if (modeButton != null) {
             modeButton.setText(focusMode ? "Focus Mode" : "Pointer Mode");
         }
@@ -839,6 +863,7 @@ public class TvActivity extends Activity {
             activeTab.webView.requestFocus();
             installTvFocusMode(focusMode);
         }
+        updateModeUi();
         Toast.makeText(this,
                 focusMode ? "TV Focus Mode — use D-pad and OK"
                           : "Pointer Mode — move pointer with D-pad",
@@ -944,12 +969,26 @@ public class TvActivity extends Activity {
 
     private void setFullScreen(boolean enabled) {
         fullScreen = enabled;
-        int visibility = enabled ? View.GONE : View.VISIBLE;
-        if (topBar != null) topBar.setVisibility(visibility);
-        if (tabScroll != null) tabScroll.setVisibility(visibility);
+        transientControls = false;
         if (enabled) {
-            Toast.makeText(this, "Full screen — press Back to restore controls", Toast.LENGTH_LONG).show();
+            if (topBar != null) topBar.animate().alpha(0f).setDuration(140)
+                    .withEndAction(() -> topBar.setVisibility(View.GONE)).start();
+            if (tabScroll != null) tabScroll.animate().alpha(0f).setDuration(140)
+                    .withEndAction(() -> tabScroll.setVisibility(View.GONE)).start();
+            Toast.makeText(this, "Full screen — Up shows controls, Back exits", Toast.LENGTH_LONG).show();
+        } else {
+            if (topBar != null) {
+                topBar.setVisibility(View.VISIBLE);
+                topBar.setAlpha(0f);
+                topBar.animate().alpha(1f).setDuration(140).start();
+            }
+            if (tabScroll != null) {
+                tabScroll.setVisibility(View.VISIBLE);
+                tabScroll.setAlpha(0f);
+                tabScroll.animate().alpha(1f).setDuration(140).start();
+            }
         }
+        updateModeUi();
     }
 
     private void showQrForCurrentPage() {
@@ -1011,7 +1050,15 @@ public class TvActivity extends Activity {
         } else if (input.matches("(?i)^[a-z0-9.-]+\\.[a-z]{2,}([/:?#].*)?$")) {
             url = "https://" + input;
         } else {
-            url = "https://www.google.com/search?q=" + Uri.encode(input);
+            recordSearch(input);
+            String engine = prefs == null ? "Google" : prefs.getString("search_engine", "Google");
+            if ("DuckDuckGo".equals(engine)) {
+                url = "https://duckduckgo.com/?q=" + Uri.encode(input);
+            } else if ("Bing".equals(engine)) {
+                url = "https://www.bing.com/search?q=" + Uri.encode(input);
+            } else {
+                url = "https://www.google.com/search?q=" + Uri.encode(input);
+            }
         }
         activeTab.webView.loadUrl(url);
     }
