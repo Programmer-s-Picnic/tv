@@ -341,7 +341,8 @@ public class TvActivity extends Activity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setDatabaseEnabled(true);
+        s.setDatabaseEnabled(false);
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
         s.setSupportZoom(true);
         s.setBuiltInZoomControls(true);
         s.setDisplayZoomControls(false);
@@ -407,6 +408,7 @@ public class TvActivity extends Activity {
     private void closeAllTabs() {
         for (BrowserTab tab : tabs) {
             webContainer.removeView(tab.webView);
+            try { tab.webView.clearCache(true); } catch (Exception ignored) {}
             tab.webView.destroy();
         }
         tabs.clear();
@@ -802,11 +804,25 @@ public class TvActivity extends Activity {
         }
     }
 
+    private void deleteCacheTree(File file) {
+        if (file == null || !file.exists()) return;
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) {
+                for (File child : children) deleteCacheTree(child);
+            }
+        }
+        try { file.delete(); } catch (Exception ignored) {}
+    }
+
     @Override
     protected void onDestroy() {
         for (BrowserTab tab : tabs) {
+            try { tab.webView.clearCache(true); } catch (Exception ignored) {}
             tab.webView.destroy();
         }
+        deleteCacheTree(getCacheDir());
+        try { deleteCacheTree(getCodeCacheDir()); } catch (Exception ignored) {}
         super.onDestroy();
     }
 }
