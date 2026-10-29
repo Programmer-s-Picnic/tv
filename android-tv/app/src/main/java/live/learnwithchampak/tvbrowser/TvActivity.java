@@ -1067,6 +1067,9 @@ public class TvActivity extends Activity {
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             int key = event.getKeyCode();
+            View focused = getCurrentFocus();
+            boolean onWeb = activeTab != null && focused == activeTab.webView;
+            boolean inChrome = focused != null && !onWeb && focused != addressBar;
 
             if (key == KeyEvent.KEYCODE_BACK) {
                 if (addressBar != null && addressBar.hasFocus()) {
@@ -1083,11 +1086,40 @@ public class TvActivity extends Activity {
                 }
             }
 
+            if (fullScreen && key == KeyEvent.KEYCODE_DPAD_UP) {
+                showTransientControls();
+                if (menuButton != null) menuButton.requestFocus();
+                return true;
+            }
+
             if (addressBar != null && addressBar.hasFocus()) {
+                if (key == KeyEvent.KEYCODE_DPAD_DOWN && activeTab != null) {
+                    activeTab.webView.requestFocus();
+                    if (focusMode) installTvFocusMode(true);
+                    return true;
+                }
+                if (key == KeyEvent.KEYCODE_DPAD_CENTER || key == KeyEvent.KEYCODE_ENTER) {
+                    showSearchOverlay();
+                    return true;
+                }
+                return super.dispatchKeyEvent(event);
+            }
+
+            if (inChrome) {
+                if (key == KeyEvent.KEYCODE_DPAD_DOWN && activeTab != null) {
+                    activeTab.webView.requestFocus();
+                    if (focusMode) installTvFocusMode(true);
+                    return true;
+                }
                 return super.dispatchKeyEvent(event);
             }
 
             if (focusMode) {
+                if (key == KeyEvent.KEYCODE_DPAD_UP && activeTab != null
+                        && activeTab.webView.getScrollY() <= dp(4)) {
+                    if (menuButton != null) menuButton.requestFocus();
+                    return true;
+                }
                 switch (key) {
                     case KeyEvent.KEYCODE_DPAD_LEFT:
                     case KeyEvent.KEYCODE_DPAD_RIGHT:
@@ -1100,16 +1132,16 @@ public class TvActivity extends Activity {
                         clickFocused(); return true;
                 }
             } else {
-                float step = dp(28);
+                float step = dp(pointerSpeed + Math.min(42, event.getRepeatCount() * 3));
                 switch (key) {
                     case KeyEvent.KEYCODE_DPAD_LEFT:
-                        pointerX -= step; clampPointer(); updatePointer(); return true;
+                        pointerX -= step; showPointerForMovement(); clampPointer(); updatePointer(); return true;
                     case KeyEvent.KEYCODE_DPAD_RIGHT:
-                        pointerX += step; clampPointer(); updatePointer(); return true;
+                        pointerX += step; showPointerForMovement(); clampPointer(); updatePointer(); return true;
                     case KeyEvent.KEYCODE_DPAD_UP:
-                        pointerY -= step; clampPointer(); updatePointer(); return true;
+                        pointerY -= step; showPointerForMovement(); clampPointer(); updatePointer(); return true;
                     case KeyEvent.KEYCODE_DPAD_DOWN:
-                        pointerY += step; clampPointer(); updatePointer(); return true;
+                        pointerY += step; showPointerForMovement(); clampPointer(); updatePointer(); return true;
                     case KeyEvent.KEYCODE_DPAD_CENTER:
                     case KeyEvent.KEYCODE_ENTER:
                     case KeyEvent.KEYCODE_BUTTON_A:
@@ -1118,6 +1150,15 @@ public class TvActivity extends Activity {
             }
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    private void showPointerForMovement() {
+        if (pointer == null) return;
+        lastPointerMove = System.currentTimeMillis();
+        pointer.setVisibility(View.VISIBLE);
+        pointer.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(80).start();
+        pointer.removeCallbacks(hidePointerRunnable);
+        pointer.postDelayed(hidePointerRunnable, 2300);
     }
 
     private void clampPointer() {
@@ -1133,6 +1174,9 @@ public class TvActivity extends Activity {
     }
 
     private void clickPointer() {
+        showPointerForMovement();
+        pointer.animate().scaleX(1.28f).scaleY(1.28f).setDuration(70)
+                .withEndAction(() -> pointer.animate().scaleX(1f).scaleY(1f).setDuration(90).start()).start();
         pointer.setVisibility(View.INVISIBLE);
         long now = System.currentTimeMillis();
         MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, pointerX, pointerY, 0);
@@ -1143,6 +1187,8 @@ public class TvActivity extends Activity {
         up.recycle();
         pointer.setVisibility(View.VISIBLE);
         pointer.bringToFront();
+        pointer.removeCallbacks(hidePointerRunnable);
+        pointer.postDelayed(hidePointerRunnable, 2300);
     }
 
     private void requestDefaultBrowser() {
@@ -1249,12 +1295,17 @@ public class TvActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        saveTabs();
         for (BrowserTab tab : tabs) {
             try { tab.webView.clearCache(true); } catch (Exception ignored) {}
             tab.webView.destroy();
         }
         deleteCacheTree(getCacheDir());
         try { deleteCacheTree(getCodeCacheDir()); } catch (Exception ignored) {}
+        if (prefs != null && prefs.getBoolean("clear_data_exit", false)) {
+            try { CookieManager.getInstance().removeAllCookies(null); } catch (Exception ignored) {}
+            try { WebStorage.getInstance().deleteAllData(); } catch (Exception ignored) {}
+        }
         super.onDestroy();
     }
 }
