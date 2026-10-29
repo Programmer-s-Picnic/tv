@@ -241,40 +241,10 @@ public class TvActivity extends Activity {
         topBar.addView(go);
         topBar.addView(reload);
 
-        actionBar = new LinearLayout(this);
-        actionBar.setOrientation(LinearLayout.HORIZONTAL);
-        actionBar.setGravity(Gravity.CENTER);
-        actionBar.setPadding(dp(8), dp(4), dp(8), dp(4));
-        actionBar.setBackgroundColor(Color.rgb(248, 252, 255));
-
-        Button home = button("Home");
-        home.setOnClickListener(v -> showStartPage(activeTab.webView));
-
-        modeButton = button("Pointer Mode");
-        modeButton.setOnClickListener(v -> toggleNavigationMode());
-
-        Button voice = button("Voice");
-        voice.setOnClickListener(v -> startVoiceSearch());
-
-        Button full = button("Full Screen");
-        full.setOnClickListener(v -> setFullScreen(true));
-
-        Button qr = button("QR to Phone");
-        qr.setOnClickListener(v -> showQrForCurrentPage());
-
-        Button newTab = button("+ New Tab");
-        newTab.setOnClickListener(v -> newTab());
-
-        Button closeAll = button("Close All Tabs");
-        closeAll.setOnClickListener(v -> closeAllTabs());
-
-        actionBar.addView(home);
-        actionBar.addView(modeButton);
-        actionBar.addView(voice);
-        actionBar.addView(full);
-        actionBar.addView(qr);
-        actionBar.addView(newTab);
-        actionBar.addView(closeAll);
+        Button menu = button("TV Menu");
+        stylePrimary(menu);
+        menu.setOnClickListener(v -> showTvMenu());
+        topBar.addView(menu);
 
         tabScroll = new HorizontalScrollView(this);
         tabScroll.setHorizontalScrollBarEnabled(false);
@@ -292,10 +262,8 @@ public class TvActivity extends Activity {
 
         page.addView(topBar, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(62)));
-        page.addView(actionBar, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(58)));
         page.addView(tabScroll, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
         page.addView(webContainer);
         root.addView(page, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -418,6 +386,49 @@ public class TvActivity extends Activity {
         Toast.makeText(this, "All tabs closed", Toast.LENGTH_SHORT).show();
     }
 
+    private void showTvMenu() {
+        String navigationLabel = focusMode ? "Switch to Pointer Mode" : "Switch to Focus Mode";
+        String[] items = new String[] {
+                "Home",
+                "Voice Search",
+                navigationLabel,
+                "Full Screen",
+                "QR to Phone",
+                "New Tab",
+                "Close All Tabs"
+        };
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("TV Menu")
+                .setItems(items, (dialog, which) -> {
+                    switch (which) {
+                        case 0:
+                            if (activeTab != null) showStartPage(activeTab.webView);
+                            break;
+                        case 1:
+                            startVoiceSearch();
+                            break;
+                        case 2:
+                            toggleNavigationMode();
+                            break;
+                        case 3:
+                            setFullScreen(true);
+                            break;
+                        case 4:
+                            showQrForCurrentPage();
+                            break;
+                        case 5:
+                            newTab();
+                            break;
+                        case 6:
+                            closeAllTabs();
+                            break;
+                    }
+                })
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
     private void showStartPage(WebView web) {
         String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
                 + "<style>body{font-family:sans-serif;background:linear-gradient(135deg,#edf7ff,#ffffff);color:#17365d;text-align:center;padding:6vh 4vw;margin:0}"
@@ -444,8 +455,6 @@ public class TvActivity extends Activity {
         focusMode = !focusMode;
         if (modeButton != null) {
             modeButton.setText(focusMode ? "Focus Mode" : "Pointer Mode");
-            if (focusMode) stylePrimary(modeButton);
-            else styleSecondary(modeButton);
         }
         if (pointer != null) pointer.setVisibility(focusMode ? View.GONE : View.VISIBLE);
 
@@ -560,7 +569,6 @@ public class TvActivity extends Activity {
         fullScreen = enabled;
         int visibility = enabled ? View.GONE : View.VISIBLE;
         if (topBar != null) topBar.setVisibility(visibility);
-        if (actionBar != null) actionBar.setVisibility(visibility);
         if (tabScroll != null) tabScroll.setVisibility(visibility);
         if (enabled) {
             Toast.makeText(this, "Full screen — press Back to restore controls", Toast.LENGTH_LONG).show();
