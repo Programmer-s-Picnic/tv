@@ -71,6 +71,7 @@ public class TvActivity extends Activity {
     private Button modeButton;
     private TextView statusBadge;
     private ProgressBar loadingBar;
+    private Button menuButton;
     private BrowserTab activeTab;
     private boolean focusMode = true;
     private boolean fullScreen = false;
@@ -189,7 +190,7 @@ public class TvActivity extends Activity {
         b.setText(label);
         b.setTextSize(16);
         b.setMinHeight(dp(50));
-        b.setFocusable(false);
+        b.setFocusable(true);
         b.setAllCaps(false);
         styleSecondary(b);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -224,6 +225,9 @@ public class TvActivity extends Activity {
         addressBar.setHint("Enter address or search");
         addressBar.setTextSize(18);
         addressBar.setImeOptions(EditorInfo.IME_ACTION_GO);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            addressBar.setShowSoftInputOnFocus(false);
+        }
         addressBar.setPadding(dp(15), 0, dp(15), 0);
         addressBar.setTextColor(Color.rgb(25, 45, 65));
         addressBar.setHintTextColor(Color.rgb(105, 125, 145));
@@ -231,6 +235,7 @@ public class TvActivity extends Activity {
         LinearLayout.LayoutParams addressLp = new LinearLayout.LayoutParams(0, dp(50), 1f);
         addressLp.setMargins(dp(6), 0, dp(6), 0);
         addressBar.setLayoutParams(addressLp);
+        addressBar.setOnClickListener(v -> showSearchOverlay());
         addressBar.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_GO ||
                     (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
@@ -259,10 +264,17 @@ public class TvActivity extends Activity {
         topBar.addView(go);
         topBar.addView(reload);
 
-        Button menu = button("TV Menu");
-        stylePrimary(menu);
-        menu.setOnClickListener(v -> showTvMenu());
-        topBar.addView(menu);
+        statusBadge = new TextView(this);
+        statusBadge.setTextSize(13);
+        statusBadge.setGravity(Gravity.CENTER);
+        statusBadge.setPadding(dp(10), 0, dp(10), 0);
+        statusBadge.setTypeface(null, android.graphics.Typeface.BOLD);
+        topBar.addView(statusBadge, new LinearLayout.LayoutParams(dp(92), dp(40)));
+
+        menuButton = button("TV Menu");
+        stylePrimary(menuButton);
+        menuButton.setOnClickListener(v -> showTvMenu());
+        topBar.addView(menuButton);
 
         tabScroll = new HorizontalScrollView(this);
         tabScroll.setHorizontalScrollBarEnabled(false);
@@ -282,6 +294,14 @@ public class TvActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(62)));
         page.addView(tabScroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+
+        loadingBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        loadingBar.setMax(100);
+        loadingBar.setProgress(0);
+        loadingBar.setVisibility(View.GONE);
+        page.addView(loadingBar, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(3)));
+
         page.addView(webContainer);
         root.addView(page, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -297,6 +317,7 @@ public class TvActivity extends Activity {
         FrameLayout.LayoutParams pp = new FrameLayout.LayoutParams(dp(58), dp(58));
         pointer.setLayoutParams(pp);
         root.addView(pointer);
+        pointer.setVisibility(focusMode ? View.GONE : View.VISIBLE);
 
         setContentView(root);
         root.post(() -> {
