@@ -459,6 +459,310 @@ public class TvActivity extends Activity {
         Toast.makeText(this, "All tabs closed", Toast.LENGTH_SHORT).show();
     }
 
+    private void updateModeUi() {
+        if (statusBadge == null) return;
+        String label = fullScreen ? "FULL" : (focusMode ? "FOCUS" : "POINTER");
+        statusBadge.setText(label);
+        statusBadge.setTextColor(fullScreen || focusMode ? Color.WHITE : Color.rgb(18, 55, 105));
+        int fill = fullScreen ? Color.rgb(30, 80, 130)
+                : (focusMode ? Color.rgb(9, 105, 218) : Color.WHITE);
+        statusBadge.setBackground(roundedBackground(fill, Color.rgb(170, 200, 228), 12));
+    }
+
+    private void recordSearch(String query) {
+        if (prefs == null || query == null || query.trim().isEmpty()) return;
+        String q = query.trim();
+        String old = prefs.getString("recent_searches", "");
+        List<String> list = new ArrayList<>();
+        list.add(q);
+        for (String x : old.split("\n")) {
+            if (!x.trim().isEmpty() && !x.equalsIgnoreCase(q) && list.size() < 5) list.add(x);
+        }
+        prefs.edit().putString("recent_searches", android.text.TextUtils.join("\n", list)).apply();
+    }
+
+    private void recordRecentUrl(String url) {
+        if (prefs == null || url == null || !(url.startsWith("http://") || url.startsWith("https://"))) return;
+        if (url.startsWith("https://start.learnwithchampak.live/")) return;
+        String old = prefs.getString("recent_urls", "");
+        List<String> list = new ArrayList<>();
+        list.add(url);
+        for (String x : old.split("\n")) {
+            if (!x.trim().isEmpty() && !x.equals(url) && list.size() < 6) list.add(x);
+        }
+        prefs.edit().putString("recent_urls", android.text.TextUtils.join("\n", list))
+                .putString("last_url", url).apply();
+    }
+
+    private String htmlEscape(String value) {
+        if (value == null) return "";
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("'", "&#39;").replace("\"", "&quot;");
+    }
+
+    private String shortLabel(String url) {
+        try {
+            Uri u = Uri.parse(url);
+            String h = u.getHost();
+            if (h != null) return h.replaceFirst("^www\\.", "");
+        } catch (Exception ignored) {}
+        return url;
+    }
+
+    private void showSearchOverlay() {
+        final android.app.AlertDialog dialog;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(22), dp(18), dp(22), dp(10));
+
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint("Search or enter a website");
+        input.setTextSize(20);
+        input.setImeOptions(EditorInfo.IME_ACTION_GO);
+        input.setBackground(roundedBackground(Color.WHITE, Color.rgb(165, 198, 228), 14));
+        input.setPadding(dp(16), 0, dp(16), 0);
+        box.addView(input, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)));
+
+        String recent = prefs == null ? "" : prefs.getString("recent_searches", "");
+        if (!recent.isEmpty()) {
+            TextView title = new TextView(this);
+            title.setText("Recent searches");
+            title.setTextSize(15);
+            title.setTextColor(Color.rgb(90, 110, 130));
+            title.setPadding(0, dp(14), 0, dp(6));
+            box.addView(title);
+            for (String q : recent.split("\n")) {
+                if (q.trim().isEmpty()) continue;
+                Button b = button(q);
+                b.setOnClickListener(v -> input.setText(q));
+                box.addView(b);
+            }
+        }
+
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this)
+                .setTitle("Search")
+                .setView(box)
+                .setPositiveButton("Go", null)
+                .setNeutralButton("Voice", null)
+                .setNegativeButton("Close", null);
+        dialog = builder.create();
+        dialog.setOnShowListener(x -> {
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String q = input.getText().toString().trim();
+                if (!q.isEmpty()) {
+                    recordSearch(q);
+                    addressBar.setText(q);
+                    loadUrl(q);
+                    dialog.dismiss();
+                }
+            });
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                dialog.dismiss();
+                startVoiceSearch();
+            });
+            input.setOnEditorActionListener((v, actionId, event) -> {
+                if (actionId == EditorInfo.IME_ACTION_GO ||
+                        (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
+                    dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
+                    return true;
+                }
+                return false;
+            });
+            input.requestFocus();
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) imm.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT);
+        });
+        dialog.show();
+    }
+
+    private void showTabSwitcher() {
+        if (tabs.isEmpty()) return;
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        final android.app.AlertDialog[] holder = new android.app.AlertDialog[1];
+
+        for (int i = 0; i < tabs.size(); i++) {
+            BrowserTab tab = tabs.get(i);
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+
+            Button open = button((i + 1) + ". " + tab.title);
+            open.setOnClickListener(v -> {
+                activateTab(tab);
+                holder[0].dismiss();
+            });
+
+            Button close = button("×");
+            close.setTextSize(22);
+            close.setOnClickListener(v -> {
+                closeTab(tab);
+                holder[0].dismiss();
+                showTabSwitcher();
+            });
+
+            row.addView(open, new LinearLayout.LayoutParams(0, dp(50), 1f));
+            row.addView(close, new LinearLayout.LayoutParams(dp(64), dp(50)));
+            list.addView(row);
+        }
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(list);
+        holder[0] = new android.app.AlertDialog.Builder(this)
+                .setTitle("Tabs")
+                .setView(scroll)
+                .setPositiveButton("+ New Tab", (d, w) -> newTab())
+                .setNegativeButton("Close", null)
+                .create();
+        holder[0].show();
+    }
+
+    private void closeTab(BrowserTab tab) {
+        if (tab == null) return;
+        int index = tabs.indexOf(tab);
+        if (index < 0) return;
+        webContainer.removeView(tab.webView);
+        tabStrip.removeView(tab.tabButton);
+        try { tab.webView.clearCache(true); } catch (Exception ignored) {}
+        tab.webView.destroy();
+        tabs.remove(tab);
+        if (tabs.isEmpty()) {
+            activeTab = null;
+            newTab();
+        } else {
+            activateTab(tabs.get(Math.max(0, Math.min(index, tabs.size() - 1))));
+        }
+    }
+
+    private void toggleBookmarkCurrent() {
+        if (activeTab == null) return;
+        String url = activeTab.webView.getUrl();
+        if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
+            Toast.makeText(this, "Open a webpage first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String old = prefs.getString("bookmarks", "");
+        List<String> list = new ArrayList<>();
+        boolean removed = false;
+        for (String x : old.split("\n")) {
+            if (x.equals(url)) removed = true;
+            else if (!x.trim().isEmpty()) list.add(x);
+        }
+        if (!removed) list.add(0, url);
+        prefs.edit().putString("bookmarks", android.text.TextUtils.join("\n", list)).apply();
+        Toast.makeText(this, removed ? "Bookmark removed" : "Bookmarked", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showSettings() {
+        String nav = prefs.getBoolean("focus_default", true) ? "Focus" : "Pointer";
+        int speed = prefs.getInt("pointer_speed", 28);
+        int text = prefs.getInt("text_size", 16);
+        boolean remember = prefs.getBoolean("remember_tabs", false);
+        boolean clear = prefs.getBoolean("clear_data_exit", false);
+        String engine = prefs.getString("search_engine", "Google");
+
+        String[] items = new String[] {
+                "Default navigation: " + nav,
+                "Pointer speed: " + speed,
+                "Text size: " + text,
+                "Remember tabs: " + (remember ? "On" : "Off"),
+                "Clear site data on exit: " + (clear ? "On" : "Off"),
+                "Search engine: " + engine
+        };
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("TV Settings")
+                .setItems(items, (d, which) -> {
+                    switch (which) {
+                        case 0:
+                            prefs.edit().putBoolean("focus_default", !prefs.getBoolean("focus_default", true)).apply();
+                            break;
+                        case 1:
+                            int next = speed == 20 ? 28 : (speed == 28 ? 40 : 20);
+                            prefs.edit().putInt("pointer_speed", next).apply();
+                            pointerSpeed = next;
+                            break;
+                        case 2:
+                            int nextText = text == 16 ? 18 : (text == 18 ? 20 : 16);
+                            prefs.edit().putInt("text_size", nextText).apply();
+                            for (BrowserTab t : tabs) t.webView.getSettings().setDefaultFontSize(nextText);
+                            break;
+                        case 3:
+                            prefs.edit().putBoolean("remember_tabs", !remember).apply();
+                            break;
+                        case 4:
+                            prefs.edit().putBoolean("clear_data_exit", !clear).apply();
+                            break;
+                        case 5:
+                            String nextEngine = engine.equals("Google") ? "DuckDuckGo"
+                                    : (engine.equals("DuckDuckGo") ? "Bing" : "Google");
+                            prefs.edit().putString("search_engine", nextEngine).apply();
+                            break;
+                    }
+                    showSettings();
+                })
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void restoreTabsOrNew() {
+        if (prefs != null && prefs.getBoolean("remember_tabs", false)) {
+            String saved = prefs.getString("saved_tabs", "");
+            int count = 0;
+            for (String url : saved.split("\n")) {
+                if (url.trim().isEmpty() || count >= 6) continue;
+                newTab();
+                loadUrl(url);
+                count++;
+            }
+            if (count > 0) return;
+        }
+        newTab();
+    }
+
+    private void saveTabs() {
+        if (prefs == null || !prefs.getBoolean("remember_tabs", false)) return;
+        List<String> urls = new ArrayList<>();
+        for (BrowserTab tab : tabs) {
+            String u = tab.webView.getUrl();
+            if (u != null && (u.startsWith("http://") || u.startsWith("https://"))
+                    && !u.startsWith("https://start.learnwithchampak.live/")) {
+                urls.add(u);
+            }
+        }
+        prefs.edit().putString("saved_tabs", android.text.TextUtils.join("\n", urls)).apply();
+    }
+
+    private void showErrorPage(WebView web) {
+        String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
+                + "<style>body{font-family:sans-serif;background:#eef7ff;color:#17365d;text-align:center;padding:14vh 8vw}"
+                + "h1{font-size:6vh}p{font-size:2.6vh}.box{display:inline-block;background:white;border:2px solid #b8daf6;"
+                + "border-radius:20px;padding:4vh 5vw}</style></head><body><div class='box'>"
+                + "<h1>Page unavailable</h1><p>Check the connection, then use Reload or TV Menu → Home.</p>"
+                + "</div></body></html>";
+        web.loadDataWithBaseURL("https://error.learnwithchampak.live/", html, "text/html", "UTF-8", null);
+    }
+
+    private void showTransientControls() {
+        if (!fullScreen) return;
+        transientControls = true;
+        topBar.setAlpha(0f);
+        tabScroll.setAlpha(0f);
+        topBar.setVisibility(View.VISIBLE);
+        tabScroll.setVisibility(View.VISIBLE);
+        topBar.animate().alpha(1f).setDuration(140).start();
+        tabScroll.animate().alpha(1f).setDuration(140).start();
+        topBar.postDelayed(() -> {
+            if (fullScreen && transientControls) {
+                topBar.setVisibility(View.GONE);
+                tabScroll.setVisibility(View.GONE);
+                transientControls = false;
+            }
+        }, 3000);
+    }
+
     private void showTvMenu() {
         String navigationLabel = focusMode ? "Switch to Pointer Mode" : "Switch to Focus Mode";
         String[] items = new String[] {
