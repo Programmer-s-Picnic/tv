@@ -258,6 +258,11 @@ public class TvActivity extends Activity {
         b.setFocusable(true);
         b.setAllCaps(false);
         styleSecondary(b);
+        b.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) {
+                v.requestRectangleOnScreen(new android.graphics.Rect(0, 0, v.getWidth(), v.getHeight()), true);
+            }
+        });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, dp(50));
         lp.setMargins(dp(3), 0, dp(3), 0);
@@ -339,7 +344,9 @@ public class TvActivity extends Activity {
         topBar.addView(menuButton);
 
         tabScroll = new HorizontalScrollView(this);
-        tabScroll.setHorizontalScrollBarEnabled(false);
+        tabScroll.setHorizontalScrollBarEnabled(true);
+        tabScroll.setScrollbarFadingEnabled(false);
+        tabScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         tabScroll.setBackgroundColor(navy2());
         tabStrip = new LinearLayout(this);
         tabStrip.setOrientation(LinearLayout.HORIZONTAL);
@@ -440,6 +447,11 @@ public class TvActivity extends Activity {
     private WebView createWebView(BrowserTab tab) {
         WebView web = new WebView(this);
         web.setBackgroundColor(navy());
+        web.setVerticalScrollBarEnabled(true);
+        web.setHorizontalScrollBarEnabled(true);
+        web.setScrollbarFadingEnabled(false);
+        web.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
+        web.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -682,6 +694,11 @@ public class TvActivity extends Activity {
         }
 
         ScrollView scroll = new ScrollView(this);
+        scroll.setVerticalScrollBarEnabled(true);
+        scroll.setScrollbarFadingEnabled(false);
+        scroll.setSmoothScrollingEnabled(true);
+        scroll.setFillViewport(true);
+        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         scroll.addView(list);
         holder[0] = new android.app.AlertDialog.Builder(this)
                 .setTitle("Bookmarks")
@@ -749,6 +766,11 @@ public class TvActivity extends Activity {
         }
 
         ScrollView scroll = new ScrollView(this);
+        scroll.setVerticalScrollBarEnabled(true);
+        scroll.setScrollbarFadingEnabled(false);
+        scroll.setSmoothScrollingEnabled(true);
+        scroll.setFillViewport(true);
+        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         scroll.addView(list);
         holder[0] = new android.app.AlertDialog.Builder(this)
                 .setTitle("History")
@@ -830,9 +852,17 @@ public class TvActivity extends Activity {
             }
         }
 
+        ScrollView searchScroll = new ScrollView(this);
+        searchScroll.setVerticalScrollBarEnabled(true);
+        searchScroll.setScrollbarFadingEnabled(false);
+        searchScroll.setSmoothScrollingEnabled(true);
+        searchScroll.setFillViewport(true);
+        searchScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        searchScroll.addView(box);
+
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this)
                 .setTitle("Search")
-                .setView(box)
+                .setView(searchScroll)
                 .setPositiveButton("Go", null)
                 .setNeutralButton("Voice", null)
                 .setNegativeButton("Close", null);
@@ -909,6 +939,11 @@ public class TvActivity extends Activity {
         }
 
         ScrollView scroll = new ScrollView(this);
+        scroll.setVerticalScrollBarEnabled(true);
+        scroll.setScrollbarFadingEnabled(false);
+        scroll.setSmoothScrollingEnabled(true);
+        scroll.setFillViewport(true);
+        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         scroll.addView(list);
         holder[0] = new android.app.AlertDialog.Builder(this)
                 .setTitle("Tabs")
@@ -977,41 +1012,66 @@ public class TvActivity extends Activity {
                 "Search engine: " + engine
         };
 
-        android.app.AlertDialog settingsDialog = new android.app.AlertDialog.Builder(this)
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        list.setBackgroundColor(navy2());
+
+        final android.app.AlertDialog[] holder = new android.app.AlertDialog[1];
+
+        for (int i = 0; i < items.length; i++) {
+            final int which = i;
+            Button row = button(items[i]);
+            row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+            row.setOnClickListener(v -> {
+                switch (which) {
+                    case 0:
+                        prefs.edit().putBoolean("focus_default", !prefs.getBoolean("focus_default", true)).apply();
+                        break;
+                    case 1:
+                        int next = speed == 20 ? 28 : (speed == 28 ? 40 : 20);
+                        prefs.edit().putInt("pointer_speed", next).apply();
+                        pointerSpeed = next;
+                        break;
+                    case 2:
+                        int nextText = text == 16 ? 18 : (text == 18 ? 20 : 16);
+                        prefs.edit().putInt("text_size", nextText).apply();
+                        for (BrowserTab t : tabs) t.webView.getSettings().setDefaultFontSize(nextText);
+                        break;
+                    case 3:
+                        prefs.edit().putBoolean("remember_tabs", !remember).apply();
+                        break;
+                    case 4:
+                        prefs.edit().putBoolean("clear_data_exit", !clear).apply();
+                        break;
+                    case 5:
+                        String nextEngine = engine.equals("Google") ? "DuckDuckGo"
+                                : (engine.equals("DuckDuckGo") ? "Bing" : "Google");
+                        prefs.edit().putString("search_engine", nextEngine).apply();
+                        break;
+                }
+                holder[0].dismiss();
+                showSettings();
+            });
+            list.addView(row, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        }
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setVerticalScrollBarEnabled(true);
+        scroll.setScrollbarFadingEnabled(false);
+        scroll.setSmoothScrollingEnabled(true);
+        scroll.setFillViewport(true);
+        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        scroll.addView(list);
+
+        holder[0] = new android.app.AlertDialog.Builder(this)
                 .setTitle("TV Settings")
-                .setItems(items, (d, which) -> {
-                    switch (which) {
-                        case 0:
-                            prefs.edit().putBoolean("focus_default", !prefs.getBoolean("focus_default", true)).apply();
-                            break;
-                        case 1:
-                            int next = speed == 20 ? 28 : (speed == 28 ? 40 : 20);
-                            prefs.edit().putInt("pointer_speed", next).apply();
-                            pointerSpeed = next;
-                            break;
-                        case 2:
-                            int nextText = text == 16 ? 18 : (text == 18 ? 20 : 16);
-                            prefs.edit().putInt("text_size", nextText).apply();
-                            for (BrowserTab t : tabs) t.webView.getSettings().setDefaultFontSize(nextText);
-                            break;
-                        case 3:
-                            prefs.edit().putBoolean("remember_tabs", !remember).apply();
-                            break;
-                        case 4:
-                            prefs.edit().putBoolean("clear_data_exit", !clear).apply();
-                            break;
-                        case 5:
-                            String nextEngine = engine.equals("Google") ? "DuckDuckGo"
-                                    : (engine.equals("DuckDuckGo") ? "Bing" : "Google");
-                            prefs.edit().putString("search_engine", nextEngine).apply();
-                            break;
-                    }
-                    showSettings();
-                })
+                .setView(scroll)
                 .setNegativeButton("Close", null)
                 .create();
-        settingsDialog.show();
-        styleTvDialog(settingsDialog);
+        holder[0].show();
+        styleTvDialog(holder[0]);
     }
 
     private void restoreTabsOrNew() {
@@ -1256,7 +1316,11 @@ public class TvActivity extends Activity {
                 + "if(dir==='up'&&dy<0){ok=true;primary=-dy;secondary=Math.abs(dx);}"
                 + "if(dir==='down'&&dy>0){ok=true;primary=dy;secondary=Math.abs(dx);}"
                 + "if(!ok)return;var score=primary+secondary*2.2;if(score<bestScore){bestScore=score;best=e;}});"
-                + "if(best)window.__champakTvSetFocus(best);"
+                + "if(best){window.__champakTvSetFocus(best);return;}"
+                + "if(dir==='down')window.scrollBy({top:Math.max(180,window.innerHeight*.72),behavior:'smooth'});"
+                + "else if(dir==='up')window.scrollBy({top:-Math.max(180,window.innerHeight*.72),behavior:'smooth'});"
+                + "else if(dir==='right')window.scrollBy({left:Math.max(180,window.innerWidth*.55),behavior:'smooth'});"
+                + "else if(dir==='left')window.scrollBy({left:-Math.max(180,window.innerWidth*.55),behavior:'smooth'});"
                 + "})();";
         activeTab.webView.evaluateJavascript(js, null);
     }
