@@ -392,7 +392,18 @@ public class TvActivity extends Activity {
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                String scheme = request.getUrl().getScheme();
+                Uri uri = request.getUrl();
+                String scheme = uri.getScheme();
+                if ("champak".equalsIgnoreCase(scheme)) {
+                    String action = uri.getHost();
+                    if ("bookmarks".equals(action)) showBookmarks();
+                    else if ("history".equals(action)) showHistory();
+                    else if ("tabs".equals(action)) showTabSwitcher();
+                    else if ("settings".equals(action)) showSettings();
+                    else if ("search".equals(action)) showSearchOverlay();
+                    else if ("voice".equals(action)) startVoiceSearch();
+                    return true;
+                }
                 return !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
             }
 
@@ -1015,17 +1026,31 @@ public class TvActivity extends Activity {
         }
 
         String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
-                + "<style>body{font-family:sans-serif;background:linear-gradient(135deg,#edf7ff,#ffffff);color:#17365d;text-align:center;padding:5vh 4vw;margin:0}"
-                + "h1{font-size:5.5vh;margin:0 0 1vh}.sub{font-size:2.4vh;color:#56738d;margin-bottom:3vh}"
-                + ".grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2vh 1.6vw;max-width:86vw;margin:auto}"
-                + ".tile{display:flex;align-items:center;justify-content:center;min-height:10vh;background:#fff;border:2px solid #b8daf6;border-radius:20px;"
-                + "font-size:2.4vh;font-weight:700;color:#0b5fae;text-decoration:none;padding:1vh 1vw;box-shadow:0 8px 24px rgba(30,80,130,.09);transition:.14s}"
-                + ".wide{grid-column:span 3;background:#eaf5ff}.bookmark{border-color:#f2c45e}.recent{color:#416986}"
-                + ".tile:focus{outline:6px solid #ffb300;outline-offset:4px;transform:scale(1.035)}"
-                + ".hint{margin-top:2.5vh;font-size:2vh;color:#6a8094}</style></head>"
-                + "<body><h1>Champak TV Browser</h1><div class='sub'>Choose a site, or press TV Menu for Search and Voice</div>"
+                + "<style>*{box-sizing:border-box}body{font-family:sans-serif;background:radial-gradient(circle at 50% 0,#123d6b 0,#081c34 42%,#051427 100%);"
+                + "color:#fff;text-align:center;padding:4vh 4vw 3vh;margin:0;min-height:100vh}"
+                + "h1{font-size:5.7vh;margin:.5vh 0 .8vh;text-shadow:0 4px 20px rgba(0,0,0,.35)}"
+                + ".sub{font-size:2.35vh;color:#b8d5ee;margin-bottom:2.8vh}"
+                + ".grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.8vh 1.4vw;max-width:88vw;margin:auto}"
+                + ".tile{display:flex;align-items:center;justify-content:center;min-height:10.5vh;background:linear-gradient(180deg,#163f69,#0c2b4c);"
+                + "border:1.5px solid #2b6ca5;border-radius:18px;font-size:2.25vh;font-weight:700;color:#eef8ff;text-decoration:none;"
+                + "padding:1.1vh 1vw;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:.14s}"
+                + ".wide{grid-column:span 3;background:linear-gradient(90deg,#0d4c87,#176ec1);border-color:#4db8ff}"
+                + ".bookmark{border-color:#d8a527;color:#ffe7a0}.recent{color:#cbe7ff}"
+                + ".tile:focus{outline:5px solid #26d6ff;outline-offset:3px;transform:scale(1.045);box-shadow:0 0 28px rgba(38,214,255,.45)}"
+                + ".quick{display:grid;grid-template-columns:repeat(4,1fr);gap:1vw;max-width:88vw;margin:2.4vh auto 0}"
+                + ".quick a{display:flex;align-items:center;justify-content:center;min-height:7.3vh;border-radius:16px;background:#0b2948;"
+                + "border:1.5px solid #315e87;color:#eaf6ff;text-decoration:none;font-size:2.1vh;font-weight:700;transition:.14s}"
+                + ".quick a:focus{outline:4px solid #ffb300;outline-offset:3px;transform:scale(1.04)}"
+                + ".hint{margin-top:2vh;font-size:1.85vh;color:#89a9c4}</style></head>"
+                + "<body><h1>Champak TV Browser</h1><div class='sub'>Fast • Simple • Made for Android TV</div>"
                 + "<div class='grid'>" + cards + "</div>"
-                + "<div class='hint'>Focus Mode is designed for D-pad navigation • Pointer Mode remains available for difficult pages</div></body></html>";
+                + "<div class='quick'>"
+                + "<a href='champak://bookmarks'>★ Bookmarks</a>"
+                + "<a href='champak://history'>◷ History</a>"
+                + "<a href='champak://tabs'>▣ Tabs</a>"
+                + "<a href='champak://settings'>⚙ Settings</a>"
+                + "</div>"
+                + "<div class='hint'>Use the D-pad in Focus Mode • Press TV Menu anytime for Search, Voice, QR and more</div></body></html>";
         web.loadDataWithBaseURL("https://start.learnwithchampak.live/", html, "text/html", "UTF-8", null);
         addressBar.setText("");
     }
