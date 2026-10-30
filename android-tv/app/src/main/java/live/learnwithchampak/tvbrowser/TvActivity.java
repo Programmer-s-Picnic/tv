@@ -150,6 +150,44 @@ public class TvActivity extends Activity {
         return bg;
     }
 
+    private void styleTvInput(EditText input) {
+        input.setTextColor(Color.WHITE);
+        input.setHintTextColor(Color.rgb(145, 177, 207));
+        input.setBackground(roundedBackground(navy2(), Color.rgb(55, 116, 171), 14));
+        input.setPadding(dp(16), 0, dp(16), 0);
+        input.setSelectAllOnFocus(false);
+    }
+
+    private void themeDialogTree(View view) {
+        if (view == null) return;
+        if (view instanceof EditText) {
+            styleTvInput((EditText) view);
+        } else if (view instanceof Button) {
+            Button b = (Button) view;
+            b.setTextColor(cyan());
+        } else if (view instanceof TextView) {
+            TextView t = (TextView) view;
+            t.setTextColor(Color.rgb(226, 240, 255));
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) view;
+            for (int i = 0; i < g.getChildCount(); i++) themeDialogTree(g.getChildAt(i));
+        }
+    }
+
+    private void styleTvDialog(android.app.AlertDialog dialog) {
+        if (dialog == null) return;
+        try {
+            android.view.Window w = dialog.getWindow();
+            if (w != null) {
+                w.setBackgroundDrawable(roundedBackground(navy2(), Color.rgb(43, 92, 137), 18));
+                View decor = w.getDecorView();
+                decor.setBackground(roundedBackground(navy2(), Color.rgb(43, 92, 137), 18));
+                themeDialogTree(decor);
+            }
+        } catch (Exception ignored) {}
+    }
+
     private void stylePrimary(Button b) {
         b.setTextColor(Color.WHITE);
         b.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -251,10 +289,7 @@ public class TvActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             addressBar.setShowSoftInputOnFocus(false);
         }
-        addressBar.setPadding(dp(15), 0, dp(15), 0);
-        addressBar.setTextColor(Color.WHITE);
-        addressBar.setHintTextColor(Color.rgb(155, 185, 215));
-        addressBar.setBackground(roundedBackground(navy2(), Color.rgb(57, 114, 170), 16));
+        styleTvInput(addressBar);
         LinearLayout.LayoutParams addressLp = new LinearLayout.LayoutParams(0, dp(50), 1f);
         addressLp.setMargins(dp(6), 0, dp(6), 0);
         addressBar.setLayoutParams(addressLp);
@@ -321,6 +356,10 @@ public class TvActivity extends Activity {
         loadingBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         loadingBar.setMax(100);
         loadingBar.setProgress(0);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            loadingBar.setProgressTintList(android.content.res.ColorStateList.valueOf(cyan()));
+            loadingBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(navy3()));
+        }
         loadingBar.setVisibility(View.GONE);
         page.addView(loadingBar, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(3)));
@@ -547,17 +586,20 @@ public class TvActivity extends Activity {
         for (String u : saved.split("\n")) if (!u.trim().isEmpty()) items.add(u);
 
         if (items.isEmpty()) {
-            new android.app.AlertDialog.Builder(this)
+            android.app.AlertDialog d = new android.app.AlertDialog.Builder(this)
                     .setTitle("Bookmarks")
                     .setMessage("No bookmarks yet. Open a webpage and choose “Add / Remove Bookmark” from TV Menu.")
                     .setPositiveButton("Close", null)
-                    .show();
+                    .create();
+            d.show();
+            styleTvDialog(d);
             return;
         }
 
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        list.setBackgroundColor(navy2());
         final android.app.AlertDialog[] holder = new android.app.AlertDialog[1];
 
         for (String url : items) {
@@ -592,6 +634,7 @@ public class TvActivity extends Activity {
                 .setPositiveButton("Close", null)
                 .create();
         holder[0].show();
+        styleTvDialog(holder[0]);
     }
 
     private void removeBookmark(String url) {
@@ -610,17 +653,20 @@ public class TvActivity extends Activity {
         for (String u : saved.split("\n")) if (!u.trim().isEmpty()) items.add(u);
 
         if (items.isEmpty()) {
-            new android.app.AlertDialog.Builder(this)
+            android.app.AlertDialog d = new android.app.AlertDialog.Builder(this)
                     .setTitle("History")
                     .setMessage("No browsing history yet.")
                     .setPositiveButton("Close", null)
-                    .show();
+                    .create();
+            d.show();
+            styleTvDialog(d);
             return;
         }
 
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        list.setBackgroundColor(navy2());
         final android.app.AlertDialog[] holder = new android.app.AlertDialog[1];
 
         for (String url : items) {
@@ -656,6 +702,7 @@ public class TvActivity extends Activity {
                 .setPositiveButton("Close", null)
                 .create();
         holder[0].show();
+        styleTvDialog(holder[0]);
     }
 
     private void removeHistoryItem(String url) {
@@ -669,7 +716,7 @@ public class TvActivity extends Activity {
     }
 
     private void confirmClearHistory() {
-        new android.app.AlertDialog.Builder(this)
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
                 .setTitle("Clear History?")
                 .setMessage("This removes the browsing history stored by Champak TV Browser.")
                 .setPositiveButton("Clear", (d, w) -> {
@@ -677,7 +724,9 @@ public class TvActivity extends Activity {
                     Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("Cancel", null)
-                .show();
+                .create();
+        dialog.show();
+        styleTvDialog(dialog);
     }
 
     private String htmlEscape(String value) {
@@ -700,14 +749,14 @@ public class TvActivity extends Activity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(22), dp(18), dp(22), dp(10));
+        box.setBackgroundColor(navy2());
 
         EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setHint("Search or enter a website");
         input.setTextSize(20);
         input.setImeOptions(EditorInfo.IME_ACTION_GO);
-        input.setBackground(roundedBackground(Color.WHITE, Color.rgb(165, 198, 228), 14));
-        input.setPadding(dp(16), 0, dp(16), 0);
+        styleTvInput(input);
         box.addView(input, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)));
 
         String recent = prefs == null ? "" : prefs.getString("recent_searches", "");
@@ -715,7 +764,7 @@ public class TvActivity extends Activity {
             TextView title = new TextView(this);
             title.setText("Recent searches");
             title.setTextSize(15);
-            title.setTextColor(Color.rgb(90, 110, 130));
+            title.setTextColor(Color.rgb(174, 205, 233));
             title.setPadding(0, dp(14), 0, dp(6));
             box.addView(title);
             for (String q : recent.split("\n")) {
@@ -734,6 +783,7 @@ public class TvActivity extends Activity {
                 .setNegativeButton("Close", null);
         dialog = builder.create();
         dialog.setOnShowListener(x -> {
+            styleTvDialog(dialog);
             dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
                 String q = input.getText().toString().trim();
                 if (!q.isEmpty()) {
@@ -767,6 +817,7 @@ public class TvActivity extends Activity {
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        list.setBackgroundColor(navy2());
         final android.app.AlertDialog[] holder = new android.app.AlertDialog[1];
 
         for (int i = 0; i < tabs.size(); i++) {
@@ -803,6 +854,7 @@ public class TvActivity extends Activity {
                 .setNegativeButton("Close", null)
                 .create();
         holder[0].show();
+        styleTvDialog(holder[0]);
     }
 
     private void closeTab(BrowserTab tab) {
@@ -923,9 +975,9 @@ public class TvActivity extends Activity {
 
     private void showErrorPage(WebView web) {
         String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
-                + "<style>body{font-family:sans-serif;background:#eef7ff;color:#17365d;text-align:center;padding:14vh 8vw}"
-                + "h1{font-size:6vh}p{font-size:2.6vh}.box{display:inline-block;background:white;border:2px solid #b8daf6;"
-                + "border-radius:20px;padding:4vh 5vw}</style></head><body><div class='box'>"
+                + "<style>body{font-family:sans-serif;background:#051427;color:#e2f0ff;text-align:center;padding:14vh 8vw}"
+                + "h1{font-size:6vh}p{font-size:2.6vh;color:#aac7df}.box{display:inline-block;background:#0a223f;border:2px solid #2f6fa7;"
+                + "border-radius:20px;padding:4vh 5vw;box-shadow:0 12px 32px rgba(0,0,0,.3)}</style></head><body><div class='box'>"
                 + "<h1>Page unavailable</h1><p>Check the connection, then use Reload or TV Menu → Home.</p>"
                 + "</div></body></html>";
         web.loadDataWithBaseURL("https://error.learnwithchampak.live/", html, "text/html", "UTF-8", null);
@@ -1215,6 +1267,7 @@ public class TvActivity extends Activity {
             box.setOrientation(LinearLayout.VERTICAL);
             box.setGravity(Gravity.CENTER);
             box.setPadding(dp(20), dp(20), dp(20), dp(20));
+            box.setBackgroundColor(navy2());
 
             ImageView image = new ImageView(this);
             image.setImageBitmap(bitmap);
@@ -1224,16 +1277,18 @@ public class TvActivity extends Activity {
             TextView label = new TextView(this);
             label.setText("Scan with your phone\n" + url);
             label.setTextSize(16);
-            label.setTextColor(Color.rgb(35, 55, 75));
+            label.setTextColor(Color.rgb(226, 240, 255));
             label.setGravity(Gravity.CENTER);
             label.setPadding(0, dp(14), 0, 0);
             box.addView(label);
 
-            new android.app.AlertDialog.Builder(this)
+            android.app.AlertDialog qrDialog = new android.app.AlertDialog.Builder(this)
                     .setTitle("Open on Phone")
                     .setView(box)
                     .setPositiveButton("Close", null)
-                    .show();
+                    .create();
+            qrDialog.show();
+            styleTvDialog(qrDialog);
         } catch (Exception e) {
             Toast.makeText(this, "Could not create QR code", Toast.LENGTH_SHORT).show();
         }
