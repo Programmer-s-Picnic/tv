@@ -135,6 +135,13 @@ public class TvActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
+    private int navy() { return Color.rgb(5, 20, 39); }
+    private int navy2() { return Color.rgb(10, 34, 63); }
+    private int navy3() { return Color.rgb(15, 48, 82); }
+    private int electricBlue() { return Color.rgb(31, 120, 255); }
+    private int cyan() { return Color.rgb(38, 214, 255); }
+    private int gold() { return Color.rgb(255, 179, 0); }
+
     private GradientDrawable roundedBackground(int fill, int stroke, int radiusDp) {
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(fill);
@@ -146,14 +153,28 @@ public class TvActivity extends Activity {
     private void stylePrimary(Button b) {
         b.setTextColor(Color.WHITE);
         b.setTypeface(null, android.graphics.Typeface.BOLD);
-        b.setBackground(roundedBackground(Color.rgb(9, 105, 218), Color.rgb(9, 105, 218), 12));
+        b.setBackground(roundedBackground(electricBlue(), cyan(), 14));
         b.setPadding(dp(15), 0, dp(15), 0);
+        b.setStateListAnimator(null);
     }
 
     private void styleSecondary(Button b) {
-        b.setTextColor(Color.rgb(18, 55, 105));
-        b.setBackground(roundedBackground(Color.WHITE, Color.rgb(188, 214, 238), 12));
+        b.setTextColor(Color.rgb(225, 239, 255));
+        b.setBackground(roundedBackground(navy3(), Color.rgb(47, 98, 145), 14));
         b.setPadding(dp(14), 0, dp(14), 0);
+        b.setStateListAnimator(null);
+        b.setOnFocusChangeListener((v, hasFocus) -> {
+            Button x = (Button) v;
+            if (hasFocus) {
+                x.setTextColor(Color.WHITE);
+                x.setBackground(roundedBackground(Color.rgb(21, 91, 170), cyan(), 14));
+                x.animate().scaleX(1.035f).scaleY(1.035f).setDuration(120).start();
+            } else {
+                x.setTextColor(Color.rgb(225, 239, 255));
+                x.setBackground(roundedBackground(navy3(), Color.rgb(47, 98, 145), 14));
+                x.animate().scaleX(1f).scaleY(1f).setDuration(120).start();
+            }
+        });
     }
 
     private void hideKeyboardAndClearAddressFocus() {
@@ -178,9 +199,9 @@ public class TvActivity extends Activity {
 
     private TextView brandText() {
         TextView text = new TextView(this);
-        text.setText("Champak Roy");
-        text.setTextColor(Color.rgb(18, 55, 105));
-        text.setTextSize(20);
+        text.setText("Champak\nTV Browser");
+        text.setTextColor(Color.WHITE);
+        text.setTextSize(18);
         text.setGravity(Gravity.CENTER_VERTICAL);
         text.setPadding(dp(8), 0, dp(12), 0);
         text.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -204,7 +225,7 @@ public class TvActivity extends Activity {
 
     private void buildUi() {
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.rgb(246, 250, 255));
+        root.setBackgroundColor(navy());
 
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
@@ -213,12 +234,12 @@ public class TvActivity extends Activity {
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setGravity(Gravity.CENTER_VERTICAL);
         topBar.setPadding(dp(8), dp(6), dp(8), dp(6));
-        topBar.setBackgroundColor(Color.rgb(243, 249, 255));
+        topBar.setBackgroundColor(navy());
 
         ImageView logo = new ImageView(this);
-        logo.setImageResource(R.drawable.champak_logo);
+        logo.setImageResource(R.mipmap.ic_launcher);
         logo.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(dp(48), dp(48));
+        LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(dp(52), dp(52));
         logoLp.setMargins(0, 0, dp(4), 0);
         logo.setLayoutParams(logoLp);
 
@@ -231,9 +252,9 @@ public class TvActivity extends Activity {
             addressBar.setShowSoftInputOnFocus(false);
         }
         addressBar.setPadding(dp(15), 0, dp(15), 0);
-        addressBar.setTextColor(Color.rgb(25, 45, 65));
-        addressBar.setHintTextColor(Color.rgb(105, 125, 145));
-        addressBar.setBackground(roundedBackground(Color.WHITE, Color.rgb(165, 198, 228), 14));
+        addressBar.setTextColor(Color.WHITE);
+        addressBar.setHintTextColor(Color.rgb(155, 185, 215));
+        addressBar.setBackground(roundedBackground(navy2(), Color.rgb(57, 114, 170), 16));
         LinearLayout.LayoutParams addressLp = new LinearLayout.LayoutParams(0, dp(50), 1f);
         addressLp.setMargins(dp(6), 0, dp(6), 0);
         addressBar.setLayoutParams(addressLp);
@@ -248,14 +269,14 @@ public class TvActivity extends Activity {
             return false;
         });
 
-        Button go = button("Go");
+        Button go = button("Go →");
         stylePrimary(go);
         go.setOnClickListener(v -> {
             loadFromAddressBar();
             hideKeyboardAndClearAddressFocus();
         });
 
-        Button reload = button("Reload");
+        Button reload = button("↻");
         reload.setOnClickListener(v -> {
             if (activeTab != null) activeTab.webView.reload();
         });
@@ -273,14 +294,14 @@ public class TvActivity extends Activity {
         statusBadge.setTypeface(null, android.graphics.Typeface.BOLD);
         topBar.addView(statusBadge, new LinearLayout.LayoutParams(dp(92), dp(40)));
 
-        menuButton = button("TV Menu");
+        menuButton = button("☰  TV Menu");
         stylePrimary(menuButton);
         menuButton.setOnClickListener(v -> showTvMenu());
         topBar.addView(menuButton);
 
         tabScroll = new HorizontalScrollView(this);
         tabScroll.setHorizontalScrollBarEnabled(false);
-        tabScroll.setBackgroundColor(Color.rgb(235, 246, 255));
+        tabScroll.setBackgroundColor(navy2());
         tabStrip = new LinearLayout(this);
         tabStrip.setOrientation(LinearLayout.HORIZONTAL);
         tabStrip.setPadding(dp(8), dp(4), dp(8), dp(4));
@@ -288,7 +309,7 @@ public class TvActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         webContainer = new FrameLayout(this);
-        webContainer.setBackgroundColor(Color.WHITE);
+        webContainer.setBackgroundColor(navy());
         webContainer.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
@@ -332,8 +353,8 @@ public class TvActivity extends Activity {
     private void newTab() {
         BrowserTab tab = new BrowserTab();
         tab.webView = createWebView(tab);
-        tab.tabButton = button("New Tab");
-        tab.tabButton.setMinWidth(dp(150));
+        tab.tabButton = button("+  New Tab");
+        tab.tabButton.setMinWidth(dp(170));
         tab.tabButton.setOnClickListener(v -> activateTab(tab));
 
         tabs.add(tab);
@@ -464,10 +485,10 @@ public class TvActivity extends Activity {
         if (statusBadge == null) return;
         String label = fullScreen ? "FULL" : (focusMode ? "FOCUS" : "POINTER");
         statusBadge.setText(label);
-        statusBadge.setTextColor(fullScreen || focusMode ? Color.WHITE : Color.rgb(18, 55, 105));
-        int fill = fullScreen ? Color.rgb(30, 80, 130)
-                : (focusMode ? Color.rgb(9, 105, 218) : Color.WHITE);
-        statusBadge.setBackground(roundedBackground(fill, Color.rgb(170, 200, 228), 12));
+        statusBadge.setTextColor(Color.WHITE);
+        int fill = fullScreen ? Color.rgb(49, 33, 110)
+                : (focusMode ? Color.rgb(0, 119, 166) : navy3());
+        statusBadge.setBackground(roundedBackground(fill, focusMode ? cyan() : Color.rgb(67, 112, 155), 14));
     }
 
     private void recordSearch(String query) {
