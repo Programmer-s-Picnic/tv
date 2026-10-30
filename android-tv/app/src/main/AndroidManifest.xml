@@ -47,6 +47,7 @@
 
         <activity
             android:name=".TvActivity"
+            android:theme="@style/TvTheme"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|uiMode"
             android:screenOrientation="landscape"
             android:exported="true">
