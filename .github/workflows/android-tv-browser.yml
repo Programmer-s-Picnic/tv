@@ -37,6 +37,9 @@ jobs:
       - name: Build release APK
         run: gradle :app:assembleRelease --stacktrace
 
+      - name: Build release AAB
+        run: gradle :app:bundleRelease --stacktrace
+
       - name: Collect APKs
         run: |
           mkdir -p dist
@@ -48,6 +51,13 @@ jobs:
         with:
           name: Champak-TV-Browser-APKs
           path: android-tv/dist/*.apk
+          if-no-files-found: error
+
+      - name: Upload Play Store AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: Champak-TV-Browser-AAB
+          path: android-tv/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
 
       - name: Publish stable test APK
