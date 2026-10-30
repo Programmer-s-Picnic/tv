@@ -13,8 +13,8 @@
         android:usesCleartextTraffic="false"
         android:theme="@style/AppTheme"
         android:label="@string/app_name"
-        android:icon="@drawable/champak_logo"
-        android:roundIcon="@drawable/champak_logo"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:banner="@drawable/tv_banner">
 
         <provider
