@@ -382,6 +382,7 @@ public class TvActivity extends Activity {
                     if (loadingBar != null) loadingBar.setVisibility(View.GONE);
                 }
                 recordRecentUrl(url);
+                recordHistory(url);
                 if (focusMode && tab == activeTab) installTvFocusMode(true);
             }
 
@@ -492,6 +493,159 @@ public class TvActivity extends Activity {
         }
         prefs.edit().putString("recent_urls", android.text.TextUtils.join("\n", list))
                 .putString("last_url", url).apply();
+    }
+
+    private void recordHistory(String url) {
+        if (prefs == null || url == null || !(url.startsWith("http://") || url.startsWith("https://"))) return;
+        if (url.startsWith("https://start.learnwithchampak.live/")
+                || url.startsWith("https://error.learnwithchampak.live/")) return;
+
+        String old = prefs.getString("history", "");
+        List<String> list = new ArrayList<>();
+        list.add(url);
+        for (String x : old.split("\n")) {
+            if (!x.trim().isEmpty() && !x.equals(url) && list.size() < 50) list.add(x);
+        }
+        prefs.edit().putString("history", android.text.TextUtils.join("\n", list)).apply();
+    }
+
+    private void showBookmarks() {
+        String saved = prefs == null ? "" : prefs.getString("bookmarks", "");
+        List<String> items = new ArrayList<>();
+        for (String u : saved.split("\n")) if (!u.trim().isEmpty()) items.add(u);
+
+        if (items.isEmpty()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Bookmarks")
+                    .setMessage("No bookmarks yet. Open a webpage and choose “Add / Remove Bookmark” from TV Menu.")
+                    .setPositiveButton("Close", null)
+                    .show();
+            return;
+        }
+
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        final android.app.AlertDialog[] holder = new android.app.AlertDialog[1];
+
+        for (String url : items) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+
+            Button open = button("★ " + shortLabel(url));
+            open.setContentDescription(url);
+            open.setOnClickListener(v -> {
+                loadUrl(url);
+                holder[0].dismiss();
+            });
+
+            Button remove = button("Remove");
+            remove.setOnClickListener(v -> {
+                removeBookmark(url);
+                holder[0].dismiss();
+                showBookmarks();
+            });
+
+            row.addView(open, new LinearLayout.LayoutParams(0, dp(50), 1f));
+            row.addView(remove, new LinearLayout.LayoutParams(dp(130), dp(50)));
+            list.addView(row);
+        }
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(list);
+        holder[0] = new android.app.AlertDialog.Builder(this)
+                .setTitle("Bookmarks")
+                .setView(scroll)
+                .setPositiveButton("Close", null)
+                .create();
+        holder[0].show();
+    }
+
+    private void removeBookmark(String url) {
+        if (prefs == null) return;
+        String old = prefs.getString("bookmarks", "");
+        List<String> list = new ArrayList<>();
+        for (String x : old.split("\n")) {
+            if (!x.trim().isEmpty() && !x.equals(url)) list.add(x);
+        }
+        prefs.edit().putString("bookmarks", android.text.TextUtils.join("\n", list)).apply();
+    }
+
+    private void showHistory() {
+        String saved = prefs == null ? "" : prefs.getString("history", "");
+        List<String> items = new ArrayList<>();
+        for (String u : saved.split("\n")) if (!u.trim().isEmpty()) items.add(u);
+
+        if (items.isEmpty()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("History")
+                    .setMessage("No browsing history yet.")
+                    .setPositiveButton("Close", null)
+                    .show();
+            return;
+        }
+
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        final android.app.AlertDialog[] holder = new android.app.AlertDialog[1];
+
+        for (String url : items) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+
+            Button open = button(shortLabel(url));
+            open.setContentDescription(url);
+            open.setOnClickListener(v -> {
+                loadUrl(url);
+                holder[0].dismiss();
+            });
+
+            Button remove = button("Remove");
+            remove.setOnClickListener(v -> {
+                removeHistoryItem(url);
+                holder[0].dismiss();
+                showHistory();
+            });
+
+            row.addView(open, new LinearLayout.LayoutParams(0, dp(50), 1f));
+            row.addView(remove, new LinearLayout.LayoutParams(dp(130), dp(50)));
+            list.addView(row);
+        }
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(list);
+        holder[0] = new android.app.AlertDialog.Builder(this)
+                .setTitle("History")
+                .setView(scroll)
+                .setNeutralButton("Clear All", (d, w) -> confirmClearHistory())
+                .setPositiveButton("Close", null)
+                .create();
+        holder[0].show();
+    }
+
+    private void removeHistoryItem(String url) {
+        if (prefs == null) return;
+        String old = prefs.getString("history", "");
+        List<String> list = new ArrayList<>();
+        for (String x : old.split("\n")) {
+            if (!x.trim().isEmpty() && !x.equals(url)) list.add(x);
+        }
+        prefs.edit().putString("history", android.text.TextUtils.join("\n", list)).apply();
+    }
+
+    private void confirmClearHistory() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Clear History?")
+                .setMessage("This removes the browsing history stored by Champak TV Browser.")
+                .setPositiveButton("Clear", (d, w) -> {
+                    if (prefs != null) prefs.edit().remove("history").remove("recent_urls").apply();
+                    Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private String htmlEscape(String value) {
@@ -769,9 +923,11 @@ public class TvActivity extends Activity {
                 "Search",
                 "Home",
                 "Tabs",
+                "Bookmarks",
+                "History",
                 "Voice Search",
                 navigationLabel,
-                "Bookmark Current Page",
+                "Add / Remove Bookmark",
                 "Full Screen",
                 "QR to Phone",
                 "New Tab",
@@ -788,14 +944,16 @@ public class TvActivity extends Activity {
                             if (activeTab != null) showStartPage(activeTab.webView);
                             break;
                         case 2: showTabSwitcher(); break;
-                        case 3: startVoiceSearch(); break;
-                        case 4: toggleNavigationMode(); break;
-                        case 5: toggleBookmarkCurrent(); break;
-                        case 6: setFullScreen(true); break;
-                        case 7: showQrForCurrentPage(); break;
-                        case 8: newTab(); break;
-                        case 9: closeAllTabs(); break;
-                        case 10: showSettings(); break;
+                        case 3: showBookmarks(); break;
+                        case 4: showHistory(); break;
+                        case 5: startVoiceSearch(); break;
+                        case 6: toggleNavigationMode(); break;
+                        case 7: toggleBookmarkCurrent(); break;
+                        case 8: setFullScreen(true); break;
+                        case 9: showQrForCurrentPage(); break;
+                        case 10: newTab(); break;
+                        case 11: closeAllTabs(); break;
+                        case 12: showSettings(); break;
                     }
                 })
                 .setNegativeButton("Close", null)
