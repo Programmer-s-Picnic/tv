@@ -6,4 +6,15 @@
         <item name="android:statusBarColor">#0D1B2A</item>
         <item name="android:colorAccent">#1976D2</item>
     </style>
+
+    <style name="TvTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#051427</item>
+        <item name="android:navigationBarColor">#051427</item>
+        <item name="android:statusBarColor">#051427</item>
+        <item name="android:colorAccent">#26D6FF</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
 </resources>
