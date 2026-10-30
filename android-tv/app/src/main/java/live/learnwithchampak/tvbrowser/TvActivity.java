@@ -211,6 +211,8 @@ public class TvActivity extends Activity {
                 x.setTextColor(Color.WHITE);
                 x.setBackground(roundedBackground(Color.rgb(21, 91, 170), cyan(), 14));
                 x.animate().scaleX(1.035f).scaleY(1.035f).setDuration(120).start();
+                v.requestRectangleOnScreen(
+                        new android.graphics.Rect(0, 0, v.getWidth(), v.getHeight()), true);
             } else {
                 x.setTextColor(Color.rgb(225, 239, 255));
                 x.setBackground(roundedBackground(navy3(), Color.rgb(47, 98, 145), 14));
@@ -258,11 +260,6 @@ public class TvActivity extends Activity {
         b.setFocusable(true);
         b.setAllCaps(false);
         styleSecondary(b);
-        b.setOnFocusChangeListener((v, hasFocus) -> {
-            if (hasFocus) {
-                v.requestRectangleOnScreen(new android.graphics.Rect(0, 0, v.getWidth(), v.getHeight()), true);
-            }
-        });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, dp(50));
         lp.setMargins(dp(3), 0, dp(3), 0);
