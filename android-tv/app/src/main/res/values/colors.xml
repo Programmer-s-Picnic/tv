@@ -1,0 +1,5 @@
+<resources>
+    <color name="browser_icon_bg">#0A66C2</color>
+    <color name="browser_icon_bg_dark">#073B7A</color>
+    <color name="browser_icon_accent">#FFB300</color>
+</resources>
