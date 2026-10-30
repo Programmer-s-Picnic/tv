@@ -406,7 +406,7 @@ public class TvActivity extends Activity {
 
     private WebView createWebView(BrowserTab tab) {
         WebView web = new WebView(this);
-        web.setBackgroundColor(Color.WHITE);
+        web.setBackgroundColor(navy());
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -509,7 +509,7 @@ public class TvActivity extends Activity {
             t.tabButton.setAlpha(t == tab ? 1f : 0.78f);
             if (t == tab) {
                 t.tabButton.setTextColor(Color.WHITE);
-                t.tabButton.setBackground(roundedBackground(Color.rgb(9, 105, 218), Color.rgb(9, 105, 218), 11));
+                t.tabButton.setBackground(roundedBackground(electricBlue(), cyan(), 12));
             } else {
                 styleSecondary(t.tabButton);
             }
@@ -910,7 +910,7 @@ public class TvActivity extends Activity {
                 "Search engine: " + engine
         };
 
-        new android.app.AlertDialog.Builder(this)
+        android.app.AlertDialog settingsDialog = new android.app.AlertDialog.Builder(this)
                 .setTitle("TV Settings")
                 .setItems(items, (d, which) -> {
                     switch (which) {
@@ -942,7 +942,9 @@ public class TvActivity extends Activity {
                     showSettings();
                 })
                 .setNegativeButton("Close", null)
-                .show();
+                .create();
+        settingsDialog.show();
+        styleTvDialog(settingsDialog);
     }
 
     private void restoreTabsOrNew() {
@@ -1019,7 +1021,7 @@ public class TvActivity extends Activity {
                 "Settings"
         };
 
-        new android.app.AlertDialog.Builder(this)
+        android.app.AlertDialog tvMenuDialog = new android.app.AlertDialog.Builder(this)
                 .setTitle("TV Menu")
                 .setItems(items, (dialog, which) -> {
                     switch (which) {
@@ -1041,7 +1043,9 @@ public class TvActivity extends Activity {
                     }
                 })
                 .setNegativeButton("Close", null)
-                .show();
+                .create();
+        tvMenuDialog.show();
+        styleTvDialog(tvMenuDialog);
     }
 
     private void showStartPage(WebView web) {
