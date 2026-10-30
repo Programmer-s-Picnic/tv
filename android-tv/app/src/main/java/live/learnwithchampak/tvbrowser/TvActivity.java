@@ -95,6 +95,9 @@ public class TvActivity extends Activity {
         WebView webView;
         Button tabButton;
         String title = "New Tab";
+        boolean pinned = false;
+        String pinnedUrl = null;
+        String pinnedTitle = null;
     }
 
     private class TvEditText extends EditText {
@@ -120,6 +123,7 @@ public class TvActivity extends Activity {
         focusMode = prefs.getBoolean("focus_default", true);
         pointerSpeed = prefs.getInt("pointer_speed", 28);
         buildUi();
+        createPermanentTabs();
         restoreTabsOrNew();
         updateModeUi();
 
@@ -389,6 +393,35 @@ public class TvActivity extends Activity {
         });
     }
 
+    private void createPermanentTabs() {
+        createPinnedTab("WhatsApp Web", "https://web.whatsapp.com/");
+        createPinnedTab("Google Sign-In",
+                "https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fwww.google.com%2F");
+    }
+
+    private BrowserTab createPinnedTab(String title, String url) {
+        for (BrowserTab existing : tabs) {
+            if (existing.pinned && url.equals(existing.pinnedUrl)) return existing;
+        }
+
+        BrowserTab tab = new BrowserTab();
+        tab.pinned = true;
+        tab.pinnedTitle = title;
+        tab.pinnedUrl = url;
+        tab.title = title;
+        tab.webView = createWebView(tab);
+        tab.tabButton = button("★  " + title);
+        tab.tabButton.setMinWidth(dp(190));
+        tab.tabButton.setOnClickListener(v -> activateTab(tab));
+
+        tabs.add(tab);
+        tabStrip.addView(tab.tabButton);
+        webContainer.addView(tab.webView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        tab.webView.loadUrl(url);
+        return tab;
+    }
+
     private void newTab() {
         BrowserTab tab = new BrowserTab();
         tab.webView = createWebView(tab);
@@ -419,6 +452,19 @@ public class TvActivity extends Activity {
         s.setUseWideViewPort(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setDefaultFontSize(prefs == null ? 16 : prefs.getInt("text_size", 16));
+
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.setAcceptThirdPartyCookies(web, true);
+        }
+
+        if (tab.pinned && "WhatsApp Web".equals(tab.pinnedTitle)) {
+            s.setUserAgentString(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    + "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    + "Chrome/131.0.0.0 Safari/537.36");
+        }
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -478,6 +524,11 @@ public class TvActivity extends Activity {
 
             @Override
             public void onReceivedTitle(WebView view, String title) {
+                if (tab.pinned) {
+                    tab.title = tab.pinnedTitle;
+                    tab.tabButton.setText("★  " + tab.pinnedTitle);
+                    return;
+                }
                 if (title == null || title.trim().isEmpty()) title = "Tab";
                 tab.title = title.length() > 18 ? title.substring(0, 18) + "…" : title;
                 tab.tabButton.setText(tab.title);
@@ -519,16 +570,20 @@ public class TvActivity extends Activity {
     }
 
     private void closeAllTabs() {
+        List<BrowserTab> removable = new ArrayList<>();
         for (BrowserTab tab : tabs) {
+            if (!tab.pinned) removable.add(tab);
+        }
+        for (BrowserTab tab : removable) {
             webContainer.removeView(tab.webView);
+            tabStrip.removeView(tab.tabButton);
             try { tab.webView.clearCache(true); } catch (Exception ignored) {}
             tab.webView.destroy();
+            tabs.remove(tab);
         }
-        tabs.clear();
-        tabStrip.removeAllViews();
         activeTab = null;
         newTab();
-        Toast.makeText(this, "All tabs closed", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Regular tabs closed. Permanent tabs kept.", Toast.LENGTH_SHORT).show();
     }
 
     private void updateModeUi() {
@@ -832,16 +887,24 @@ public class TvActivity extends Activity {
                 holder[0].dismiss();
             });
 
-            Button close = button("×");
-            close.setTextSize(22);
-            close.setOnClickListener(v -> {
-                closeTab(tab);
-                holder[0].dismiss();
-                showTabSwitcher();
-            });
-
             row.addView(open, new LinearLayout.LayoutParams(0, dp(50), 1f));
-            row.addView(close, new LinearLayout.LayoutParams(dp(64), dp(50)));
+            if (!tab.pinned) {
+                Button close = button("×");
+                close.setTextSize(22);
+                close.setOnClickListener(v -> {
+                    closeTab(tab);
+                    holder[0].dismiss();
+                    showTabSwitcher();
+                });
+                row.addView(close, new LinearLayout.LayoutParams(dp(64), dp(50)));
+            } else {
+                TextView pin = new TextView(this);
+                pin.setText("PINNED");
+                pin.setGravity(Gravity.CENTER);
+                pin.setTextColor(gold());
+                pin.setTypeface(null, android.graphics.Typeface.BOLD);
+                row.addView(pin, new LinearLayout.LayoutParams(dp(92), dp(50)));
+            }
             list.addView(row);
         }
 
@@ -859,6 +922,10 @@ public class TvActivity extends Activity {
 
     private void closeTab(BrowserTab tab) {
         if (tab == null) return;
+        if (tab.pinned) {
+            Toast.makeText(this, "This is a permanent tab", Toast.LENGTH_SHORT).show();
+            return;
+        }
         int index = tabs.indexOf(tab);
         if (index < 0) return;
         webContainer.removeView(tab.webView);
@@ -966,6 +1033,7 @@ public class TvActivity extends Activity {
         if (prefs == null || !prefs.getBoolean("remember_tabs", false)) return;
         List<String> urls = new ArrayList<>();
         for (BrowserTab tab : tabs) {
+            if (tab.pinned) continue;
             String u = tab.webView.getUrl();
             if (u != null && (u.startsWith("http://") || u.startsWith("https://"))
                     && !u.startsWith("https://start.learnwithchampak.live/")) {
