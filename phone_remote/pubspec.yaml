@@ -1,5 +1,5 @@
 name: champaks_tv_remote
-description: Champak's TV Remote Android starter
+description: Champak's TV Remote Android prototype
 publish_to: none
 version: 0.1.0+1
 environment:
@@ -8,9 +8,5 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.3.2
-  flutter_local_notifications: ^19.0.0
-  timezone: ^0.10.0
-  flutter_timezone: ^3.0.1
-  uuid: ^4.5.1
 flutter:
   uses-material-design: true
