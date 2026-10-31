@@ -59,7 +59,7 @@ class _RemoteHomeState extends State<RemoteHome>{
     Expanded(child:keyButton(Icons.apps,'Apps'))]),
    const SizedBox(height:9),
    Row(children:[Expanded(child:keyButton(Icons.volume_down,'Vol -')),const SizedBox(width:7),
-    Expanded(child:keyButton(Icons.play_pause,'Media')),const SizedBox(width:7),
+    Expanded(child:keyButton(Icons.play_arrow_rounded,'Media')),const SizedBox(width:7),
     Expanded(child:keyButton(Icons.volume_up,'Vol +'))])]))]);
  Widget touchpad()=>panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
   const Text('Precision touchpad',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold,color:ink)),
