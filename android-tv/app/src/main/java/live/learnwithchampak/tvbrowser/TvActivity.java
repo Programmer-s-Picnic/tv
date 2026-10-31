@@ -82,6 +82,7 @@ public class TvActivity extends Activity {
     private int pointerSpeed = 28;
     private long lastPointerMove = 0L;
     private int pointerRepeat = 0;
+    private long lastZoneSwitchAt = 0L;
     private final Runnable hidePointerRunnable = () -> {
         if (!focusMode && pointer != null && System.currentTimeMillis() - lastPointerMove >= 2200) {
             pointer.setVisibility(View.GONE);
@@ -1110,22 +1111,72 @@ public class TvActivity extends Activity {
         web.loadDataWithBaseURL("https://error.learnwithchampak.live/", html, "text/html", "UTF-8", null);
     }
 
+    private boolean isBrowserChrome(View focused) {
+        if (focused == null || activeTab == null) return false;
+        if (focused == activeTab.webView) return false;
+        View current = focused;
+        while (current != null) {
+            if (current == topBar || current == tabStrip || current == tabScroll) return true;
+            if (!(current.getParent() instanceof View)) break;
+            current = (View) current.getParent();
+        }
+        return false;
+    }
+
+    private void focusBrowserControls() {
+        lastZoneSwitchAt = System.currentTimeMillis();
+        if (fullScreen) showTransientControls();
+        if (menuButton != null) {
+            menuButton.requestFocus();
+            menuButton.bringToFront();
+        } else if (addressBar != null) {
+            addressBar.requestFocus();
+        }
+        Toast.makeText(this, "Browser controls", Toast.LENGTH_SHORT).show();
+    }
+
+    private void focusWebContent() {
+        if (activeTab == null || activeTab.webView == null) return;
+        lastZoneSwitchAt = System.currentTimeMillis();
+        activeTab.webView.requestFocus();
+        if (focusMode) installTvFocusMode(true);
+        if (fullScreen && transientControls) {
+            hideTransientControls();
+        }
+    }
+
+    private void hideTransientControls() {
+        if (!fullScreen) return;
+        transientControls = false;
+        if (topBar != null) {
+            topBar.clearAnimation();
+            topBar.setVisibility(View.GONE);
+        }
+        if (tabScroll != null) {
+            tabScroll.clearAnimation();
+            tabScroll.setVisibility(View.GONE);
+        }
+    }
+
     private void showTransientControls() {
         if (!fullScreen) return;
         transientControls = true;
-        topBar.setAlpha(0f);
-        tabScroll.setAlpha(0f);
-        topBar.setVisibility(View.VISIBLE);
-        tabScroll.setVisibility(View.VISIBLE);
-        topBar.animate().alpha(1f).setDuration(140).start();
-        tabScroll.animate().alpha(1f).setDuration(140).start();
-        topBar.postDelayed(() -> {
-            if (fullScreen && transientControls) {
-                topBar.setVisibility(View.GONE);
-                tabScroll.setVisibility(View.GONE);
-                transientControls = false;
-            }
-        }, 3000);
+
+        if (topBar != null) {
+            topBar.clearAnimation();
+            topBar.setVisibility(View.VISIBLE);
+            topBar.setAlpha(0f);
+            topBar.animate().alpha(1f).setDuration(120).start();
+        }
+        if (tabScroll != null) {
+            tabScroll.clearAnimation();
+            tabScroll.setVisibility(View.VISIBLE);
+            tabScroll.setAlpha(0f);
+            tabScroll.animate().alpha(1f).setDuration(120).start();
+        }
+
+        // Do not auto-hide while the user is navigating browser controls.
+        // Controls are hidden again when focus explicitly returns to the WebView.
     }
 
     private void showTvMenu() {
@@ -1360,22 +1411,26 @@ public class TvActivity extends Activity {
         fullScreen = enabled;
         transientControls = false;
         if (enabled) {
-            if (topBar != null) topBar.animate().alpha(0f).setDuration(140)
+            if (topBar != null) topBar.animate().alpha(0f).setDuration(120)
                     .withEndAction(() -> topBar.setVisibility(View.GONE)).start();
-            if (tabScroll != null) tabScroll.animate().alpha(0f).setDuration(140)
+            if (tabScroll != null) tabScroll.animate().alpha(0f).setDuration(120)
                     .withEndAction(() -> tabScroll.setVisibility(View.GONE)).start();
-            Toast.makeText(this, "Full screen — Up shows controls, Back exits", Toast.LENGTH_LONG).show();
+            if (activeTab != null) activeTab.webView.requestFocus();
+            Toast.makeText(this,
+                    "Full screen — hold Up for controls • Back exits",
+                    Toast.LENGTH_LONG).show();
         } else {
             if (topBar != null) {
+                topBar.clearAnimation();
                 topBar.setVisibility(View.VISIBLE);
-                topBar.setAlpha(0f);
-                topBar.animate().alpha(1f).setDuration(140).start();
+                topBar.setAlpha(1f);
             }
             if (tabScroll != null) {
+                tabScroll.clearAnimation();
                 tabScroll.setVisibility(View.VISIBLE);
-                tabScroll.setAlpha(0f);
-                tabScroll.animate().alpha(1f).setDuration(140).start();
+                tabScroll.setAlpha(1f);
             }
+            if (activeTab != null) activeTab.webView.requestFocus();
         }
         updateModeUi();
     }
@@ -1457,12 +1512,15 @@ public class TvActivity extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            int key = event.getKeyCode();
+        int action = event.getAction();
+        int key = event.getKeyCode();
+
+        if (action == KeyEvent.ACTION_DOWN) {
             View focused = getCurrentFocus();
             boolean onWeb = activeTab != null && focused == activeTab.webView;
-            boolean inChrome = focused != null && !onWeb && focused != addressBar;
+            boolean inChrome = isBrowserChrome(focused);
 
+            // Back has one predictable order everywhere.
             if (key == KeyEvent.KEYCODE_BACK) {
                 if (addressBar != null && addressBar.hasFocus()) {
                     hideKeyboardAndClearAddressFocus();
@@ -1478,16 +1536,23 @@ public class TvActivity extends Activity {
                 }
             }
 
-            if (fullScreen && key == KeyEvent.KEYCODE_DPAD_UP) {
-                showTransientControls();
-                if (menuButton != null) menuButton.requestFocus();
+            // Hold Up from the WebView to jump to browser controls from anywhere.
+            // A normal Up remains available for webpage navigation.
+            if (onWeb && key == KeyEvent.KEYCODE_DPAD_UP && event.getRepeatCount() >= 2) {
+                focusBrowserControls();
+                return true;
+            }
+
+            // In fullscreen, even a normal Up at the top reveals controls.
+            if (fullScreen && onWeb && key == KeyEvent.KEYCODE_DPAD_UP
+                    && activeTab.webView.getScrollY() <= dp(8)) {
+                focusBrowserControls();
                 return true;
             }
 
             if (addressBar != null && addressBar.hasFocus()) {
-                if (key == KeyEvent.KEYCODE_DPAD_DOWN && activeTab != null) {
-                    activeTab.webView.requestFocus();
-                    if (focusMode) installTvFocusMode(true);
+                if (key == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    focusWebContent();
                     return true;
                 }
                 if (key == KeyEvent.KEYCODE_DPAD_CENTER || key == KeyEvent.KEYCODE_ENTER) {
@@ -1497,19 +1562,21 @@ public class TvActivity extends Activity {
                 return super.dispatchKeyEvent(event);
             }
 
+            // Down from any browser control is the universal return-to-page command.
+            if (inChrome && key == KeyEvent.KEYCODE_DPAD_DOWN) {
+                focusWebContent();
+                return true;
+            }
+
             if (inChrome) {
-                if (key == KeyEvent.KEYCODE_DPAD_DOWN && activeTab != null) {
-                    activeTab.webView.requestFocus();
-                    if (focusMode) installTvFocusMode(true);
-                    return true;
-                }
                 return super.dispatchKeyEvent(event);
             }
 
             if (focusMode) {
-                if (key == KeyEvent.KEYCODE_DPAD_UP && activeTab != null
-                        && activeTab.webView.getScrollY() <= dp(4)) {
-                    if (menuButton != null) menuButton.requestFocus();
+                // At the very top, Up moves naturally to controls.
+                if (key == KeyEvent.KEYCODE_DPAD_UP && onWeb
+                        && activeTab.webView.getScrollY() <= dp(8)) {
+                    focusBrowserControls();
                     return true;
                 }
                 switch (key) {
@@ -1517,13 +1584,20 @@ public class TvActivity extends Activity {
                     case KeyEvent.KEYCODE_DPAD_RIGHT:
                     case KeyEvent.KEYCODE_DPAD_UP:
                     case KeyEvent.KEYCODE_DPAD_DOWN:
-                        moveFocus(key); return true;
+                        moveFocus(key);
+                        return true;
                     case KeyEvent.KEYCODE_DPAD_CENTER:
                     case KeyEvent.KEYCODE_ENTER:
                     case KeyEvent.KEYCODE_BUTTON_A:
-                        clickFocused(); return true;
+                        clickFocused();
+                        return true;
                 }
             } else {
+                // Pointer mode: hold Up to escape the page and reach controls.
+                if (key == KeyEvent.KEYCODE_DPAD_UP && event.getRepeatCount() >= 2) {
+                    focusBrowserControls();
+                    return true;
+                }
                 float step = dp(pointerSpeed + Math.min(42, event.getRepeatCount() * 3));
                 switch (key) {
                     case KeyEvent.KEYCODE_DPAD_LEFT:
@@ -1542,6 +1616,23 @@ public class TvActivity extends Activity {
             }
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (fullScreen) {
+            setFullScreen(false);
+            return;
+        }
+        if (addressBar != null && addressBar.hasFocus()) {
+            hideKeyboardAndClearAddressFocus();
+            return;
+        }
+        if (activeTab != null && activeTab.webView.canGoBack()) {
+            activeTab.webView.goBack();
+            return;
+        }
+        super.onBackPressed();
     }
 
     private void showPointerForMovement() {
