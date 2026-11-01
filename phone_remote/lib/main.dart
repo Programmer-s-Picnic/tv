@@ -57,6 +57,24 @@ class _RemoteHomeState extends State<RemoteHome>{
      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Command failed: $e')));
    }
  }
+ Future<void> powerTv() async {
+   try {
+     await TvLink.instance.togglePower();
+     if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+       content:Text('Power command sent. On/off depends on TV standby network support.')));
+   } catch(e) {
+     if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+       content:Text('Cannot reach TV: $e'),duration:const Duration(seconds:6)));
+   }
+ }
+ void launchYouTube() {
+   try {
+     TvLink.instance.openYouTube();
+     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Opening YouTube on your TV')));
+   } catch(e) {
+     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('YouTube: $e')));
+   }
+ }
  Future<String> pairingPin() async {
    final controller=TextEditingController();
    final code=await showDialog<String>(context:context,barrierDismissible:false,builder:(ctx)=>AlertDialog(
@@ -165,7 +183,7 @@ class _RemoteHomeState extends State<RemoteHome>{
  ]))),
   const SizedBox(height:15),panel(Column(children:[
    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
-    IconButton(onPressed:()=>unavailable('Power'),icon:const Icon(Icons.power_settings_new,color:blue)),
+    IconButton(tooltip:'TV power on / standby',onPressed:powerTv,icon:const Icon(Icons.power_settings_new,color:blue,size:30)),
     const Text('REMOTE',style:TextStyle(letterSpacing:2,fontWeight:FontWeight.bold,color:ink)),
     IconButton(onPressed:()=>unavailable('Settings'),icon:const Icon(Icons.settings_outlined,color:blue))]),
    SizedBox(height:245,width:245,child:Stack(alignment:Alignment.center,children:[
@@ -183,7 +201,18 @@ class _RemoteHomeState extends State<RemoteHome>{
    const SizedBox(height:9),
    Row(children:[Expanded(child:keyButton(Icons.volume_down,'Vol -')),const SizedBox(width:7),
     Expanded(child:keyButton(Icons.play_arrow_rounded,'Media')),const SizedBox(width:7),
-    Expanded(child:keyButton(Icons.volume_up,'Vol +'))])]))]);
+    Expanded(child:keyButton(Icons.volume_up,'Vol +'))]),
+   const SizedBox(height:12),
+   SizedBox(width:double.infinity,child:FilledButton.icon(
+     style:FilledButton.styleFrom(backgroundColor:const Color(0xffda1729),
+       foregroundColor:Colors.white,padding:const EdgeInsets.symmetric(vertical:15)),
+     onPressed:launchYouTube,
+     icon:const Icon(Icons.smart_display_rounded,size:27),
+     label:const Text('Open YouTube',style:TextStyle(fontWeight:FontWeight.bold,fontSize:17)))),
+   const SizedBox(height:7),
+   const Text('Power button toggles TV standby where supported.',
+     style:TextStyle(fontSize:11,color:Colors.black54))
+   ]))]);
  Widget touchpad()=>panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
   const Text('Precision touchpad',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold,color:ink)),
   const Text('Swipe to move • Tap to click',style:TextStyle(color:Colors.black54)),
@@ -269,7 +298,7 @@ class _RemoteHomeState extends State<RemoteHome>{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V0.4'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V0.5'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
