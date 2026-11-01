@@ -137,6 +137,24 @@ class TvLink {
     remote.sendKey(code);
   }
 
+  /// Launch the installed YouTube TV app using Android TV's deep-link command.
+  void openYouTube() {
+    if (!connected) throw StateError('Connect to the television first');
+    remote.launchApp('com.google.android.youtube.tv');
+  }
+
+  /// Toggle TV standby via the paired remote v2 channel.
+  /// Some sets drop Wi-Fi or stop their remote service in standby.
+  Future<void> togglePower() async {
+    if (!connected) {
+      final recovered = await reconnectPreferred();
+      if (!recovered) {
+        throw StateError('TV is unreachable. Check its standby network settings or power it on with its original remote.');
+      }
+    }
+    remote.sendKey(RemoteKeyCode.power);
+  }
+
   void text(String value) {
     if(!connected) throw StateError('No TV connected');
     remote.sendText(value);
