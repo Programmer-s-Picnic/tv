@@ -4,6 +4,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tv_connection.dart';
+import 'bluetooth_power.dart';
 import 'package:android_tv_remote/android_tv_remote.dart';
 const blue=Color(0xff2563eb),ink=Color(0xff192b4e);
 Future<void> main() async { WidgetsFlutterBinding.ensureInitialized(); await TvLink.instance.initialize(); runApp(const RemoteApp()); }
@@ -101,6 +102,67 @@ class _RemoteHomeState extends State<RemoteHome>{
      ScaffoldMessenger.of(context).showSnackBar(
        const SnackBar(content:Text('Recognized speech sent to TV text field')));
    }catch(e){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Voice text: $e')));}
+ }
+ Future<void> bluetoothPowerDialog() async {
+   Map<String,dynamic> info = {};
+   List<Map<String,dynamic>> devices=[];
+   String status = 'Checking phone Bluetooth support…';
+   bool busy = false;
+   await showDialog<void>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,update) {
+     Future<void> setup() async {
+       update(()=>busy=true);
+       try {
+         await BluetoothTvPower.requestPermission();
+         info=await BluetoothTvPower.initialize();
+         devices=await BluetoothTvPower.bondedDevices();
+         status='Select a paired Realme TV. It must support a Bluetooth HID remote connection.';
+       } catch(e) {status='Unavailable: $e';}
+       update(()=>busy=false);
+     }
+     Future<void> connect(Map<String,dynamic> device) async {
+       update(()=>busy=true);
+       try {
+         final result=await BluetoothTvPower.connect(device['address'].toString());
+         status='Bluetooth connection requested for ${device['name']}. Wait for connected status; then test Power.';
+         info=result;
+       } catch(e) {status='Connection error: $e';}
+       update(()=>busy=false);
+     }
+     Future<void> sendPower() async {
+       update(()=>busy=true);
+       try {
+         final sent=await BluetoothTvPower.power();
+         status=sent?'Bluetooth power packet submitted. Check the TV; wake-up is not guaranteed.'
+           :'The Bluetooth profile did not accept the power packet.';
+       }catch(e){status='Power unavailable: $e';}
+       try {info=await BluetoothTvPower.status();}catch(_){}
+       update(()=>busy=false);
+     }
+     return AlertDialog(
+       title:const Text('Bluetooth TV Power (experimental)'),
+       content:SizedBox(width:340,child:SingleChildScrollView(child:Column(
+         crossAxisAlignment:CrossAxisAlignment.start,mainAxisSize:MainAxisSize.min,children:[
+           const Text('Bluetooth on a phone is not enough by itself. The phone must support HID Device mode, and the TV must accept it as a remote.'),
+           const SizedBox(height:8),Text(status,style:const TextStyle(fontSize:12,color:Colors.black87)),
+           if(info.isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text(
+              'HID available: ${info['hidProfileAvailable']==true} · Registered: ${info['hidRegistered']==true} · Connected: ${info['hidConnected']==true}',
+              style:const TextStyle(fontSize:12,fontWeight:FontWeight.bold))),
+           const SizedBox(height:10),
+           ...devices.map((d)=>ListTile(
+             leading:const Icon(Icons.bluetooth),
+             title:Text(d['name']?.toString()??'Bluetooth device'),
+             subtitle:Text(d['address']?.toString()??''),
+             onTap:busy?null:()=>connect(d))),
+           if(busy)const LinearProgressIndicator(),
+         ]))),
+       actions:[
+         TextButton(onPressed:()=>BluetoothTvPower.openSettings(),
+           child:const Text('Pair in Settings')),
+         TextButton(onPressed:busy?null:setup,child:const Text('Check / Refresh')),
+         FilledButton(onPressed:busy?null:sendPower,child:const Text('Test Power')),
+         TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Close')),
+       ]);
+   }));
  }
  Future<void> powerTv() async {
    try {
@@ -276,6 +338,10 @@ class _RemoteHomeState extends State<RemoteHome>{
      icon:const Icon(Icons.smart_display_rounded,size:27),
      label:const Text('Open YouTube',style:TextStyle(fontWeight:FontWeight.bold,fontSize:17)))),
    const SizedBox(height:7),
+   OutlinedButton.icon(onPressed:bluetoothPowerDialog,
+     icon:const Icon(Icons.bluetooth),label:const Text('Try Bluetooth TV Power')),
+   const SizedBox(height:4),
+   const Text('Bluetooth experiment requires HID Device support and TV pairing.'),
    const Text('Power button toggles TV standby where supported.',
      style:TextStyle(fontSize:11,color:Colors.black54))
    ]))]);
@@ -364,7 +430,7 @@ class _RemoteHomeState extends State<RemoteHome>{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V0.6'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V0.7'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
