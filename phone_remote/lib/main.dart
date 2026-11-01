@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tv_connection.dart';
@@ -24,9 +25,12 @@ class _RemoteHomeState extends State<RemoteHome>{
  int page=0;List<Map<String,dynamic>> programs=[];
  StreamSubscription<ConnState>? connectionListener;
  bool findingTv=false;
+ final stt.SpeechToText speech=stt.SpeechToText();
+ bool listening=false;
+ String spoken='';
  final tvText=TextEditingController();
  DateTime lastSwipe=DateTime.fromMillisecondsSinceEpoch(0);
- @override void dispose(){connectionListener?.cancel();tvText.dispose();super.dispose();}
+ @override void dispose(){speech.stop();connectionListener?.cancel();tvText.dispose();super.dispose();}
  @override void initState(){
   super.initState();
   load();
@@ -56,6 +60,47 @@ class _RemoteHomeState extends State<RemoteHome>{
    } catch(e) {
      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Command failed: $e')));
    }
+ }
+ Future<void> toggleMicrophone() async {
+   if(listening){
+     await speech.stop();
+     if(mounted)setState(()=>listening=false);
+     return;
+   }
+   try{
+     final available=await speech.initialize(
+       onStatus:(status){if(mounted && (status=='done'||status=='notListening'))setState(()=>listening=false);},
+       onError:(error){if(mounted){setState(()=>listening=false);
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Microphone: ${error.errorMsg}')));}});
+     if(!available){
+       if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+         const SnackBar(content:Text('Speech recognition unavailable on this phone.')));
+       return;
+     }
+     if(!mounted)return;
+     setState((){listening=true;spoken='';});
+     await speech.listen(
+       onResult:(result){if(mounted)setState(()=>spoken=result.recognizedWords);},
+       listenFor:const Duration(seconds:45),
+       pauseFor:const Duration(seconds:4),
+       partialResults:true);
+   }catch(e){
+     if(mounted){setState(()=>listening=false);
+       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Microphone error: $e')));}
+   }
+ }
+ void sendSpokenText(){
+   if(spoken.trim().isEmpty)return;
+   if(!TvLink.instance.connected){
+     ScaffoldMessenger.of(context).showSnackBar(
+       const SnackBar(content:Text('Connect the TV first, then select a search field.')));
+     return;
+   }
+   try{
+     TvLink.instance.text(spoken.trim());
+     ScaffoldMessenger.of(context).showSnackBar(
+       const SnackBar(content:Text('Recognized speech sent to TV text field')));
+   }catch(e){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Voice text: $e')));}
  }
  Future<void> powerTv() async {
    try {
@@ -181,6 +226,27 @@ class _RemoteHomeState extends State<RemoteHome>{
    ])),
    const Icon(Icons.expand_more_rounded,color:blue),
  ]))),
+  const SizedBox(height:12),
+  panel(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+    Row(children:[
+      Icon(listening?Icons.mic:Icons.mic_none_rounded,color:blue,size:28),
+      const SizedBox(width:10),
+      const Expanded(child:Text('Speak using your phone',style:TextStyle(fontWeight:FontWeight.bold,color:ink))),
+      FilledButton.tonalIcon(onPressed:toggleMicrophone,
+        icon:Icon(listening?Icons.stop_circle_outlined:Icons.mic),
+        label:Text(listening?'Stop':'Speak'))
+    ]),
+    if(spoken.isNotEmpty)...[
+      const SizedBox(height:8),
+      SelectableText(spoken,style:const TextStyle(fontSize:15)),
+      const SizedBox(height:8),
+      FilledButton.icon(onPressed:sendSpokenText,icon:const Icon(Icons.send),
+        label:const Text('Send spoken words to TV'))
+    ],
+    const SizedBox(height:6),
+    const Text('Uses your phone\'s speech recognition to type into a TV text field. It does not stream microphone audio or activate Google Assistant on TV.',
+      style:TextStyle(fontSize:11,color:Colors.black54))
+  ])),
   const SizedBox(height:15),panel(Column(children:[
    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
     IconButton(tooltip:'TV power on / standby',onPressed:powerTv,icon:const Icon(Icons.power_settings_new,color:blue,size:30)),
@@ -298,7 +364,7 @@ class _RemoteHomeState extends State<RemoteHome>{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V0.5'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V0.6'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
