@@ -1,23 +1,36 @@
-# Champak's TV Remote
+# Champak's TV Remote — v0.3 release candidate
 
-Flutter Android phone remote starter in Programmer-s-Picnic/tv.
+Flutter phone remote for compatible Android TV / Google TV devices.
 
-## Included
-- Polished light-blue remote screen
-- Touchpad and keyboard layouts
-- Browser shortcut controls
-- Program planner with day, time, channel and reminder lead-time settings
-- Local persistence of program entries
+## Features implemented
+- Wi-Fi TV discovery, manual IP entry, six-character PIN pairing
+- Remote v2 key commands: navigation, Home, Back, volume and media buttons
+- Phone keyboard text send
+- Swipe-to-directional navigation
+- Locally saved favorite TV program schedules
+- Dedicated TV Browser shortcut layout (not all shortcuts supported yet)
 
-## Current limitations
-TV pairing, actual TV commands and Android notification delivery are not yet implemented. Buttons are clearly marked as prototypes; program reminders are stored locally but no device notifications are scheduled.
+## Limitations
+Pairing and commands require Android TV Remote v2 support and have not been tested on the owner's physical television. Swipe navigation is directional focus navigation, not a full mouse pointer. TV Browser-specific shortcuts require further TV Browser integration. Programs are saved locally; notifications are not yet delivered.
 
-## Build APK
-On GitHub choose Actions > Build Champak Phone Remote APK > Run workflow. Download the build artifact after success.
+## Branding and publishing
+- Vector artwork: `branding/app_icon.svg`
+- Generate launcher and Play graphics: `python3 scripts/generate_branding.py`
+- Apply launcher icons: `dart run flutter_launcher_icons` (after `flutter pub get`)
+- Distribution workflow in `json-images` generates the branded APK and Play graphics.
+- Play submission checklist: [PLAY_STORE_RELEASE.md](PLAY_STORE_RELEASE.md)
+- Privacy policy: https://programmer-s-picnic.github.io/json-images/tv/champaks-tv-remote-privacy.html
 
-Local commands from phone_remote:
-1. flutter create --platforms android --org live.learnwithchampak .
-2. flutter pub get
-3. flutter build apk --release
+## Build locally
+Run:
+```bash
+flutter create --platforms android --org live.learnwithchampak .
+python3 scripts/configure_android.py
+flutter pub get
+python3 -m pip install pillow cairosvg
+python3 scripts/generate_branding.py
+dart run flutter_launcher_icons
+flutter build apk --release
+```
 
-The workflow has not yet been verified by a successful build.
+For Google Play, configure production signing and build an Android App Bundle after device testing and legal/dependency review. The development APK workflow is not a production-signing substitute.
