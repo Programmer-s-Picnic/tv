@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tv_connection.dart';
@@ -21,10 +22,26 @@ class RemoteHome extends StatefulWidget{
 }
 class _RemoteHomeState extends State<RemoteHome>{
  int page=0;List<Map<String,dynamic>> programs=[];
+ StreamSubscription<ConnState>? connectionListener;
+ bool findingTv=false;
  final tvText=TextEditingController();
  DateTime lastSwipe=DateTime.fromMillisecondsSinceEpoch(0);
- @override void dispose(){tvText.dispose();super.dispose();}
- @override void initState(){super.initState();load();}
+ @override void dispose(){connectionListener?.cancel();tvText.dispose();super.dispose();}
+ @override void initState(){
+  super.initState();
+  load();
+  connectionListener=TvLink.instance.states.listen((_) {
+    if(mounted) setState(() {});
+  });
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    if(!mounted)return;
+    final ok=await TvLink.instance.reconnectPreferred();
+    if(mounted){setState(() {});if(!ok && TvLink.instance.selectedId!=null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:Text('Saved TV is offline. Tap the TV card to select another TV.')));
+    }}
+  });
+ }
  Future<void> load()async{final p=await SharedPreferences.getInstance();
  try{setState(()=>programs=List<Map<String,dynamic>>.from(jsonDecode(p.getString('tv_programs')??'[]')));}catch(_){}}
  Future<void> save()async{final p=await SharedPreferences.getInstance();
@@ -54,30 +71,55 @@ class _RemoteHomeState extends State<RemoteHome>{
    return code;
  }
  Future<void> pairTv() async {
-   try {
-     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Searching the local Wi-Fi network for Android TVs…')));
-     final found=await TvLink.instance.discover();
-     if(!mounted)return;
-     final ipController=TextEditingController();
-     final selection=await showDialog<Object>(context:context,builder:(ctx)=>AlertDialog(
-       title:const Text('Connect to Android TV'),
-       content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
-         if(found.isEmpty)const Text('No TVs discovered. Enter the TV IP address below.'),
-         ...found.map((device)=>ListTile(leading:const Icon(Icons.tv,color:blue),
+   if(findingTv)return;
+   await showTvPicker(scan:TvLink.instance.knownDevices.isEmpty);
+ }
+ Future<void> showTvPicker({required bool scan}) async {
+   if(findingTv)return;
+   if(scan) {
+     setState(()=>findingTv=true);
+     try {await TvLink.instance.discover();}
+     catch(e) {if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content:Text('TV search failed: $e')));}
+     finally {if(mounted)setState(()=>findingTv=false);}
+   }
+   if(!mounted)return;
+   final ipController=TextEditingController();
+   final selection=await showDialog<Object>(context:context,builder:(ctx)=>AlertDialog(
+     title:const Text('Choose your television'),
+     content:SingleChildScrollView(child:Column(
+       mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+         const Text('Saved and discovered TVs',style:TextStyle(color:Colors.black54)),
+         const SizedBox(height:8),
+         if(TvLink.instance.knownDevices.isEmpty)const Padding(
+           padding:EdgeInsets.all(12),child:Text('No TV saved yet. Scan Wi-Fi or enter an IP address.')),
+         ...TvLink.instance.knownDevices.map((device)=>ListTile(
+           leading:Icon(device.id==TvLink.instance.selectedId ? Icons.tv_rounded:Icons.tv_outlined,color:blue),
            title:Text(device.name),subtitle:Text(device.host),
+           trailing:device.id==TvLink.instance.selectedId
+             ?const Icon(Icons.check_circle,color:Colors.green):const Icon(Icons.chevron_right),
            onTap:()=>Navigator.pop(ctx,device))),
-         const SizedBox(height:12),TextField(controller:ipController,
-           keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'TV IP address (manual)',hintText:'192.168.1.10'))
+         const Divider(),
+         TextField(controller:ipController,keyboardType:TextInputType.number,
+           decoration:const InputDecoration(labelText:'Manual TV IP',hintText:'192.168.1.10')),
        ])),
-       actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel')),
-         FilledButton(onPressed:()=>Navigator.pop(ctx,ipController.text.trim()),child:const Text('Connect IP'))]));
-     if(selection==null)return;
-     if(selection is TvDevice) {await TvLink.instance.connect(selection,pairingPin);}
-     else {await TvLink.instance.connectIp(selection.toString(),pairingPin);}
-     if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(
-       const SnackBar(content:Text('Connected! Try Home or the D-pad.')));}
+     actions:[
+       TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel')),
+       TextButton.icon(onPressed:()=>Navigator.pop(ctx,'__scan__'),
+         icon:const Icon(Icons.wifi_find),label:const Text('Scan Wi-Fi')),
+       FilledButton(onPressed:()=>Navigator.pop(ctx,ipController.text.trim()),
+         child:const Text('Connect IP'))]));
+   if(!mounted || selection==null)return;
+   if(selection=='__scan__'){await showTvPicker(scan:true);return;}
+   if(selection is String && selection.isEmpty)return;
+   try {
+     if(selection is TvDevice)await TvLink.instance.connect(selection,pairingPin);
+     else await TvLink.instance.connectIp(selection.toString(),pairingPin);
+     if(mounted){setState(() {});ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content:Text('Connected to ${TvLink.instance.connectedName}')));}
    } catch(e) {
-     if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('TV connection: $e'),duration:const Duration(seconds:7)));
+     if(mounted){setState(() {});ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+       content:Text('Connection failed: $e'),duration:const Duration(seconds:6)));}
    }
  }
  void sendTypedText() {
@@ -104,10 +146,23 @@ class _RemoteHomeState extends State<RemoteHome>{
     Icon(icon,color:blue),const SizedBox(height:4),
     Text(title,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w600,color:ink))])));
  Widget remote()=>Column(children:[
-  panel(const Row(children:[Icon(Icons.tv_rounded,color:blue,size:34),SizedBox(width:12),
+  panel(InkWell(onTap:pairTv,borderRadius:BorderRadius.circular(16),child:Row(children:[
+   Icon(TvLink.instance.connected?Icons.tv_rounded:Icons.tv_outlined,color:blue,size:34),
+   const SizedBox(width:12),
    Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Text('Android TV',style:TextStyle(fontWeight:FontWeight.bold,fontSize:18)),
-    Text('Not connected • Pairing is next',style:TextStyle(color:Colors.black54))]))])),
+     Text(TvLink.instance.connected
+       ?(TvLink.instance.connectedName??'Android TV')
+       : (TvLink.instance.selectedId!=null?'Saved Android TV':'Choose Android TV'),
+       style:const TextStyle(fontWeight:FontWeight.bold,fontSize:18)),
+     Text(TvLink.instance.connected?'Connected • Tap to switch TV'
+       : findingTv?'Searching nearby TVs…'
+       : TvLink.instance.reconnecting?'Reconnecting to saved TV…'
+       : TvLink.instance.selectedId!=null?'Offline • Tap to reconnect or switch'
+       :'Not connected • Tap to pair',
+       style:TextStyle(color:TvLink.instance.connected?Colors.green.shade700:Colors.black54))
+   ])),
+   const Icon(Icons.expand_more_rounded,color:blue),
+ ]))),
   const SizedBox(height:15),panel(Column(children:[
    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
     IconButton(onPressed:()=>unavailable('Power'),icon:const Icon(Icons.power_settings_new,color:blue)),
@@ -214,7 +269,7 @@ class _RemoteHomeState extends State<RemoteHome>{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V0.1'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V0.4'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
