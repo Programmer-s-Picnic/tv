@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tv_connection.dart';
 import 'bluetooth_power.dart';
+import 'tv_install_panel.dart';
 import 'package:android_tv_remote/android_tv_remote.dart';
 const blue=Color(0xff2563eb),ink=Color(0xff192b4e);
 Future<void> main() async { WidgetsFlutterBinding.ensureInitialized(); await TvLink.instance.initialize(); runApp(const RemoteApp()); }
@@ -445,16 +446,16 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
     IconButton(onPressed:(){setState(()=>programs.removeAt(item.key));save();},
      icon:const Icon(Icons.delete_outline))]))))]);
  @override Widget build(BuildContext context){
-  const names=['Remote','Touchpad','Keyboard','Programs','Browser'];
-  const icons=[Icons.gamepad,Icons.mouse,Icons.keyboard,Icons.calendar_month,Icons.language];
-  final pages=[remote(),touchpad(),keyboard(),planner(),browser()];
+  const names=['Remote','Touchpad','Keyboard','Programs','Browser','Install'];
+  const icons=[Icons.gamepad,Icons.mouse,Icons.keyboard,Icons.calendar_month,Icons.language,Icons.install_mobile];
+  final pages=[remote(),touchpad(),keyboard(),planner(),browser(),TvInstallPanel(initialHost:TvLink.instance.preferredHost)];
   return Scaffold(appBar:AppBar(title:const Text("Champak's TV Remote",
    style:TextStyle(fontWeight:FontWeight.bold,color:ink)),actions:[
     IconButton(onPressed:pairTv,icon:Icon(TvLink.instance.connected?Icons.cast_connected:Icons.cast,color:blue))]),
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V0.9.1'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V1.0'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
