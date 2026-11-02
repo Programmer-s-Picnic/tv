@@ -24,6 +24,7 @@ if 'android.permission.BLUETOOTH_CONNECT' not in s:
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <application''',1)
+s = s.replace('<application', '<application android:usesCleartextTraffic="true"', 1)
 manifest.write_text(s)
 # Replace Flutter's generated activity with our Android HID bridge.
 activity = Path('android/app/src/main/kotlin/live/learnwithchampak/champaks_tv_remote/MainActivity.kt')
