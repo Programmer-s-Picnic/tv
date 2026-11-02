@@ -13,6 +13,9 @@ class TvLink {
   Stream<ConnState> get states => _states.stream;
   StreamSubscription<ConnState>? _subscription;
   final Map<String, TvDevice> _known = {};
+  final Map<String, String> _aliases = {};
+  String displayName(TvDevice device) => _aliases[device.id] ?? device.name;
+  String get preferredName => selectedId == null ? 'Android TV' : (_known[selectedId] == null ? 'Android TV' : displayName(_known[selectedId]!));
   String? selectedId;
   bool reconnecting = false;
   String connectionMessage = 'Not connected';
@@ -46,6 +49,14 @@ class TvLink {
     });
     final prefs = await SharedPreferences.getInstance();
     selectedId = prefs.getString('preferred_tv_id');
+    try {
+      final names = jsonDecode(prefs.getString('tv_aliases_v1') ?? '{}') as Map;
+      for (final e in names.entries) {
+        if (e.key is String && e.value is String && (e.value as String).trim().isNotEmpty) {
+          _aliases[e.key as String] = (e.value as String).trim();
+        }
+      }
+    } catch (_) {}
     try {
       final devices = jsonDecode(prefs.getString('known_tvs_v2') ?? '[]') as List<dynamic>;
       for (final item in devices) {
@@ -100,7 +111,47 @@ class TvLink {
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('known_tvs_v2', jsonEncode(_known.values.map((d)=>d.toJson()).toList()));
-    if(selectedId != null) await prefs.setString('preferred_tv_id', selectedId!);
+    await prefs.setString('tv_aliases_v1', jsonEncode(_aliases));
+    if(selectedId != null) { await prefs.setString('preferred_tv_id', selectedId!); }
+    else { await prefs.remove('preferred_tv_id'); }
+  }
+
+  /// A local display nickname; does not change the remote certificate/device ID.
+  Future<void> renameTv(String id, String name) async {
+    if (!_known.containsKey(id)) throw StateError('Saved TV not found');
+    final nickname = name.trim();
+    if (nickname.isEmpty || nickname.length > 40) {
+      throw const FormatException('Use a name between 1 and 40 characters');
+    }
+    _aliases[id] = nickname;
+    if (selectedId == id && connected) connectedName = nickname;
+    await _persist();
+    _states.add(remote.state);
+  }
+
+  /// Forget one TV, including stored remote credentials. Never affects other TVs.
+  Future<void> forgetTv(String id) async {
+    if (!_known.containsKey(id)) return;
+    _retryTimer?.cancel();
+    _userSwitching = true;
+    try {
+      if (_ongoingReconnect != null) {
+        try { await _ongoingReconnect; } catch (_) {}
+      }
+      if (selectedId == id) {
+        if (connected) remote.disconnect();
+        selectedId = null;
+        connectedName = null;
+        connectionMessage = 'Choose your television';
+      }
+      _known.remove(id);
+      _aliases.remove(id);
+      await remote.removeSavedDevice(id);
+      await _persist();
+    } finally {
+      _userSwitching = false;
+      _states.add(remote.state);
+    }
   }
 
   Future<List<TvDevice>> discover() async {
@@ -120,11 +171,11 @@ class TvLink {
     try {
       _known[device.id] = device;
       await _persist();
-      connectionMessage = 'Connecting to ${device.name}';
+      connectionMessage = 'Connecting to ${displayName(device)}';
       _states.add(remote.state);
       await remote.connect(device, onPairingCode: askPin);
       if (!connected) throw StateError('The TV did not confirm the connection');
-      connectedName = device.name;
+      connectedName = displayName(device);
       selectedId = device.id;
       _retryIndex = 0;
       connectionMessage = 'Connected';
@@ -164,7 +215,7 @@ class TvLink {
     final device = _known[selectedId];
     if (device == null) return false;
     reconnecting = true;
-    connectionMessage = 'Reconnecting to ${device.name}';
+    connectionMessage = 'Reconnecting to ${displayName(device)}';
     _states.add(remote.state);
     try {
       // On a saved certificate, the remote library reconnects without a PIN.
