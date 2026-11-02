@@ -225,10 +225,17 @@ class TvLink {
     remote.sendKey(code);
   }
 
-  /// Launch the installed YouTube TV app using Android TV's deep-link command.
-  void openYouTube() {
-    if (!connected) throw StateError('Connect to the television first');
-    remote.launchApp('com.google.android.youtube.tv');
+  /// Request YouTube with an HTTPS app link. Using a bare package name makes
+  /// this remote library rewrite it to market://launch?id=..., which is not
+  /// consistently supported by Android TV and can silently do nothing.
+  Future<void> openYouTube({bool alternate=false}) async {
+    if (!connected) {
+      final ok = await reconnectPreferred();
+      if (!ok) throw StateError('TV is not connected. Reconnection is in progress.');
+    }
+    remote.launchApp(alternate
+      ? 'https://www.youtube.com/'
+      : 'https://www.youtube.com/tv');
   }
 
   /// Toggle TV standby via the paired remote v2 channel.
