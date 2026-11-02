@@ -219,6 +219,107 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    if(code==null||code.length!=6) throw const FormatException('Pairing cancelled or invalid code');
    return code;
  }
+ Future<void> renameSavedTv(TvDevice device) async {
+   final controller=TextEditingController(text:TvLink.instance.displayName(device));
+   final nickname=await showDialog<String>(context:context,builder:(ctx)=>AlertDialog(
+     title:const Text('Name this television'),
+     content:TextField(controller:controller,autofocus:true,maxLength:40,
+       textCapitalization:TextCapitalization.words,
+       decoration:const InputDecoration(labelText:'TV name',hintText:'Living Room TV'),
+       onSubmitted:(v)=>Navigator.pop(ctx,v.trim())),
+     actions:[
+       TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel')),
+       FilledButton(onPressed:()=>Navigator.pop(ctx,controller.text.trim()),
+         child:const Text('Save name'))
+     ]));
+   controller.dispose();
+   if(nickname==null || nickname.isEmpty)return;
+   try {
+     await TvLink.instance.renameTv(device.id,nickname);
+     if(mounted)setState(() {});
+   }catch(e){
+     if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content:Text('Could not save TV name: $e')));
+   }
+ }
+ Future<void> forgetSavedTv(TvDevice device) async {
+   final confirmed=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+     title:Text('Forget ${TvLink.instance.displayName(device)}?'),
+     content:const Text('This removes the saved pairing for this television. You will need a new PIN to pair it again. Other TVs will not be affected.'),
+     actions:[
+       TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
+       TextButton(onPressed:()=>Navigator.pop(ctx,true),
+         child:const Text('Forget TV',style:TextStyle(color:Colors.red)))
+     ]));
+   if(confirmed!=true)return;
+   try {
+     await TvLink.instance.forgetTv(device.id);
+     if(mounted)setState(() {});
+   }catch(e){
+     if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content:Text('Could not forget TV: $e')));
+   }
+ }
+ Future<void> manageSavedTvs() async {
+   await showDialog<void>(context:context,builder:(ctx)=>StatefulBuilder(
+     builder:(ctx,refresh)=>AlertDialog(
+       title:const Text('Saved TVs'),
+       content:SizedBox(width:400,child:SingleChildScrollView(
+         child:Column(mainAxisSize:MainAxisSize.min,children:[
+           if(TvLink.instance.knownDevices.isEmpty)
+             const Padding(padding:EdgeInsets.all(12),
+               child:Text('No saved TVs. Pair a television to add it here.')),
+           ...TvLink.instance.knownDevices.map((device)=>Card(
+             child:Column(children:[
+               ListTile(
+                 leading:Icon(device.id==TvLink.instance.selectedId?
+                   Icons.tv_rounded:Icons.tv_outlined,color:blue),
+                 title:Text(TvLink.instance.displayName(device)),
+                 subtitle:Text(device.host),
+                 trailing:device.id==TvLink.instance.selectedId?
+                   const Icon(Icons.check_circle,color:Colors.green):null,
+                 onTap:() async {
+                   Navigator.pop(ctx);
+                   await connectSelectedTv(device);
+                 }),
+               Row(mainAxisAlignment:MainAxisAlignment.end,children:[
+                 TextButton.icon(
+                   onPressed:() async {
+                     await renameSavedTv(device);
+                     if(ctx.mounted)refresh(() {});
+                   },
+                   icon:const Icon(Icons.edit_outlined,size:17),
+                   label:const Text('Rename')),
+                 TextButton.icon(
+                   onPressed:() async {
+                     await forgetSavedTv(device);
+                     if(ctx.mounted)refresh(() {});
+                   },
+                   icon:const Icon(Icons.delete_outline,size:17),
+                   label:const Text('Forget')),
+               ]),
+             ]))),
+         ]))),
+       actions:[
+         TextButton.icon(onPressed:(){
+           Navigator.pop(ctx);
+           showTvPicker(scan:true);
+         },icon:const Icon(Icons.add),label:const Text('Add TV')),
+         FilledButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Done'))
+       ],
+     )));
+ }
+ Future<void> connectSelectedTv(TvDevice device) async {
+   try {
+     await TvLink.instance.connect(device,pairingPin);
+     if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content:Text('Connected to ${TvLink.instance.displayName(device)}'),
+         duration:const Duration(seconds:2)));}
+   } catch(e) {
+     if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content:Text('TV connection: $e')));
+   }
+ }
  Future<void> pairTv() async {
    if(findingTv)return;
    await showTvPicker(scan:TvLink.instance.knownDevices.isEmpty);
@@ -244,10 +345,12 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
            padding:EdgeInsets.all(12),child:Text('No TV saved yet. Scan Wi-Fi or enter an IP address.')),
          ...TvLink.instance.knownDevices.map((device)=>ListTile(
            leading:Icon(device.id==TvLink.instance.selectedId ? Icons.tv_rounded:Icons.tv_outlined,color:blue),
-           title:Text(device.name),subtitle:Text(device.host),
+           title:Text(TvLink.instance.displayName(device)),subtitle:Text(device.host),
            trailing:device.id==TvLink.instance.selectedId
              ?const Icon(Icons.check_circle,color:Colors.green):const Icon(Icons.chevron_right),
            onTap:()=>Navigator.pop(ctx,device))),
+         TextButton.icon(onPressed:()=>Navigator.pop(ctx,'__manage__'),
+           icon:const Icon(Icons.edit_note),label:const Text('Manage saved TVs')),
          const Divider(),
          TextField(controller:ipController,keyboardType:TextInputType.number,
            decoration:const InputDecoration(labelText:'Manual TV IP',hintText:'192.168.1.10')),
@@ -260,6 +363,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
          child:const Text('Connect IP'))]));
    if(!mounted || selection==null)return;
    if(selection=='__scan__'){await showTvPicker(scan:true);return;}
+   if(selection=='__manage__'){await manageSavedTvs();return;}
    if(selection is String && selection.isEmpty)return;
    try {
      if(selection is TvDevice)await TvLink.instance.connect(selection,pairingPin);
@@ -300,7 +404,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    const SizedBox(width:12),
    Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
      Text(TvLink.instance.connected
-       ?(TvLink.instance.connectedName??'Android TV')
+       ?TvLink.instance.preferredName
        : (TvLink.instance.selectedId!=null?'Saved Android TV':'Choose Android TV'),
        style:const TextStyle(fontWeight:FontWeight.bold,fontSize:18)),
      Text(TvLink.instance.connected?'Connected • Tap to switch TV'
@@ -309,6 +413,8 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
        :'Not connected • Tap to pair',
        style:TextStyle(color:TvLink.instance.connected?Colors.green.shade700:Colors.black54))
    ])),
+   IconButton(tooltip:'Manage saved TVs',
+     onPressed:manageSavedTvs,icon:const Icon(Icons.edit_note,color:blue)),
    const Icon(Icons.expand_more_rounded,color:blue),
  ]))),
   const SizedBox(height:12),
@@ -455,7 +561,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V1.0'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V1.1'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
