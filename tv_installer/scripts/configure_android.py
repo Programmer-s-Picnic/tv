@@ -5,7 +5,7 @@ s = s.replace('<application', '''<uses-permission android:name="android.permissi
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
-    <application android:usesCleartextTraffic="true"''', 1)
+    <application android:usesCleartextTraffic="true" android:banner="@mipmap/ic_launcher"''', 1)
 s = s.replace('android:label="champaks_tv_installer"', 'android:label="Champak TV Installer"')
 s = s.replace('</application>', '''<provider
          android:name="androidx.core.content.FileProvider"
