@@ -33,8 +33,8 @@ class MainActivity: FlutterActivity() {
           "install" -> {
             val path = call.argument<String>("path") ?: ""
             val file = File(path)
-            val filesDir = filesDir.canonicalFile
-            if (!file.canonicalFile.toPath().startsWith(filesDir.toPath()) ||
+            val safeRoot = applicationContext.filesDir.canonicalFile
+            if (!file.canonicalFile.toPath().startsWith(safeRoot.toPath()) ||
                 file.name != "incoming.apk" || !file.isFile) {
               result.error("INVALID_FILE", "Unexpected APK path", null)
             } else {
