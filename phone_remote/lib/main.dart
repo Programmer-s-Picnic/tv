@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'tv_connection.dart';
 import 'bluetooth_power.dart';
 import 'tv_install_panel.dart';
+import 'tv_apps_panel.dart';
 import 'package:android_tv_remote/android_tv_remote.dart';
 const blue=Color(0xff2563eb),ink=Color(0xff192b4e);
 Future<void> main() async { WidgetsFlutterBinding.ensureInitialized(); await TvLink.instance.initialize(); runApp(const RemoteApp()); }
@@ -320,6 +321,12 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
        SnackBar(content:Text('TV connection: $e')));
    }
  }
+ void openMyTvApps() {
+   Navigator.push(context,MaterialPageRoute(builder:(ctx)=>Scaffold(
+     appBar:AppBar(title:const Text('My TV Apps')),
+     body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
+       child:const TvAppsPanel())))));
+ }
  Future<void> pairTv() async {
    if(findingTv)return;
    await showTvPicker(scan:TvLink.instance.knownDevices.isEmpty);
@@ -399,6 +406,9 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
     Icon(icon,color:blue),const SizedBox(height:4),
     Text(title,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w600,color:ink))])));
  Widget remote()=>Column(children:[
+  Padding(padding:const EdgeInsets.only(bottom:12),child:SizedBox(width:double.infinity,
+    child:FilledButton.tonalIcon(onPressed:openMyTvApps,icon:const Icon(Icons.apps_rounded),
+      label:const Text('My TV Apps · Shortcuts')))),
   panel(InkWell(onTap:pairTv,borderRadius:BorderRadius.circular(16),child:Row(children:[
    Icon(TvLink.instance.connected?Icons.tv_rounded:Icons.tv_outlined,color:blue,size:34),
    const SizedBox(width:12),
@@ -557,11 +567,12 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
   final pages=[remote(),touchpad(),keyboard(),planner(),browser(),TvInstallPanel(initialHost:TvLink.instance.preferredHost)];
   return Scaffold(appBar:AppBar(title:const Text("Champak's TV Remote",
    style:TextStyle(fontWeight:FontWeight.bold,color:ink)),actions:[
+    IconButton(tooltip:'My TV Apps',onPressed:openMyTvApps,icon:const Icon(Icons.apps,color:blue)),
     IconButton(onPressed:pairTv,icon:Icon(TvLink.instance.connected?Icons.cast_connected:Icons.cast,color:blue))]),
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V1.1'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V1.2'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
