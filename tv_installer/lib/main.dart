@@ -119,7 +119,7 @@ class _ReceiverScreenState extends State<ReceiverScreen> {
     File? destination;
     IOSink? sink;
     try {
-      final directory = await getApplicationDocumentsDirectory();
+      final directory = await getApplicationSupportDirectory();
       destination = File('${directory.path}/incoming.apk');
       if (await destination.exists()) await destination.delete();
       sink = destination.openWrite();
