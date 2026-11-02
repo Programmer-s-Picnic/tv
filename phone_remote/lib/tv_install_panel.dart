@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -96,7 +97,7 @@ class _TvInstallPanelState extends State<TvInstallPanel> {
         });
       }
       final response = await request.close();
-      final message = await response.transform(SystemEncoding().decoder).join();
+      final message = await response.transform(utf8.decoder).join();
       if(response.statusCode!=200) throw StateError('TV rejected transfer (${response.statusCode}): $message');
       update('Transfer completed. On the TV select Install received APK and approve Android’s installer.');
     } catch(e) {
