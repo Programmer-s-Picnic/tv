@@ -175,12 +175,21 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
        content:Text('Cannot reach TV: $e'),duration:const Duration(seconds:6)));
    }
  }
- void launchYouTube() {
+ Future<void> launchYouTube({bool alternate=false}) async {
    try {
-     TvLink.instance.openYouTube();
-     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Opening YouTube on your TV')));
+     await TvLink.instance.openYouTube(alternate:alternate);
+     if(!mounted)return;
+     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+       duration:const Duration(seconds:7),
+       content:Text(alternate
+         ?'Alternative YouTube link sent. Check the TV screen.'
+         :'YouTube launch requested. If the TV does not respond, try Alternative launch.'),
+       action:alternate?null:SnackBarAction(label:'Try alternative',onPressed:(){
+         launchYouTube(alternate:true);
+       })));
    } catch(e) {
-     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('YouTube: $e')));
+     if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content:Text('YouTube launch failed: $e'),duration:const Duration(seconds:6)));
    }
  }
  Future<String> pairingPin() async {
@@ -334,9 +343,11 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    SizedBox(width:double.infinity,child:FilledButton.icon(
      style:FilledButton.styleFrom(backgroundColor:const Color(0xffda1729),
        foregroundColor:Colors.white,padding:const EdgeInsets.symmetric(vertical:15)),
-     onPressed:launchYouTube,
+     onPressed:()=>launchYouTube(),
      icon:const Icon(Icons.smart_display_rounded,size:27),
      label:const Text('Open YouTube',style:TextStyle(fontWeight:FontWeight.bold,fontSize:17)))),
+   TextButton.icon(onPressed:()=>launchYouTube(alternate:true),
+     icon:const Icon(Icons.open_in_new),label:const Text('Alternative YouTube launch')),
    const SizedBox(height:7),
    OutlinedButton.icon(onPressed:bluetoothPowerDialog,
      icon:const Icon(Icons.bluetooth),label:const Text('Try Bluetooth TV Power')),
@@ -430,7 +441,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V0.8'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V0.9'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
