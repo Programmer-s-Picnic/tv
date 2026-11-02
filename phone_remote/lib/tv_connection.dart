@@ -27,6 +27,7 @@ class TvLink {
   bool get connected => remote.state == ConnState.connected;
   ConnState get state => remote.state;
   List<TvDevice> get knownDevices => _known.values.toList();
+  String get preferredHost => _known[selectedId]?.host ?? '';
 
   Future<void> initialize() async {
     final dir = await getApplicationDocumentsDirectory();
