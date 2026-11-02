@@ -22,7 +22,7 @@ class RemoteHome extends StatefulWidget{
  const RemoteHome({super.key});
  @override State<RemoteHome> createState()=>_RemoteHomeState();
 }
-class _RemoteHomeState extends State<RemoteHome>{
+class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
  int page=0;List<Map<String,dynamic>> programs=[];
  StreamSubscription<ConnState>? connectionListener;
  bool findingTv=false;
@@ -31,9 +31,10 @@ class _RemoteHomeState extends State<RemoteHome>{
  String spoken='';
  final tvText=TextEditingController();
  DateTime lastSwipe=DateTime.fromMillisecondsSinceEpoch(0);
- @override void dispose(){speech.stop();connectionListener?.cancel();tvText.dispose();super.dispose();}
+ @override void dispose(){WidgetsBinding.instance.removeObserver(this);TvLink.instance.setActive(false);speech.stop();connectionListener?.cancel();tvText.dispose();super.dispose();}
  @override void initState(){
   super.initState();
+  WidgetsBinding.instance.addObserver(this);
   load();
   connectionListener=TvLink.instance.states.listen((_) {
     if(mounted) setState(() {});
@@ -41,11 +42,11 @@ class _RemoteHomeState extends State<RemoteHome>{
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     if(!mounted)return;
     final ok=await TvLink.instance.reconnectPreferred();
-    if(mounted){setState(() {});if(!ok && TvLink.instance.selectedId!=null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('Saved TV is offline. Tap the TV card to select another TV.')));
-    }}
+    if(mounted) setState(() {});
   });
+ }
+ @override void didChangeAppLifecycleState(AppLifecycleState state) {
+   TvLink.instance.setActive(state == AppLifecycleState.resumed);
  }
  Future<void> load()async{final p=await SharedPreferences.getInstance();
  try{setState(()=>programs=List<Map<String,dynamic>>.from(jsonDecode(p.getString('tv_programs')??'[]')));}catch(_){}}
@@ -281,8 +282,7 @@ class _RemoteHomeState extends State<RemoteHome>{
        style:const TextStyle(fontWeight:FontWeight.bold,fontSize:18)),
      Text(TvLink.instance.connected?'Connected • Tap to switch TV'
        : findingTv?'Searching nearby TVs…'
-       : TvLink.instance.reconnecting?'Reconnecting to saved TV…'
-       : TvLink.instance.selectedId!=null?'Offline • Tap to reconnect or switch'
+       : TvLink.instance.selectedId!=null?TvLink.instance.connectionMessage
        :'Not connected • Tap to pair',
        style:TextStyle(color:TvLink.instance.connected?Colors.green.shade700:Colors.black54))
    ])),
@@ -430,7 +430,7 @@ class _RemoteHomeState extends State<RemoteHome>{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V0.7'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V0.8'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
