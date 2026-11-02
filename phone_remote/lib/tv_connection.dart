@@ -15,6 +15,13 @@ class TvLink {
   final Map<String, TvDevice> _known = {};
   String? selectedId;
   bool reconnecting = false;
+  String connectionMessage = 'Not connected';
+  DateTime? lastConnected;
+  Future<bool>? _ongoingReconnect;
+  int _retryIndex = 0;
+  Timer? _retryTimer;
+  bool _active = true;
+  bool _userSwitching = false;
   String? connectedName;
 
   bool get connected => remote.state == ConnState.connected;
@@ -27,6 +34,12 @@ class TvLink {
     _subscription = remote.onStateChanged.listen((state) {
       if (state == ConnState.disconnected || state == ConnState.error) {
         connectedName = null;
+        if (_active && !_userSwitching && selectedId != null) _scheduleRetry();
+      } else if(state == ConnState.connected) {
+        _retryIndex = 0;
+        _retryTimer?.cancel();
+        connectionMessage = 'Connected';
+        lastConnected = DateTime.now();
       }
       _states.add(state);
     });
@@ -52,6 +65,35 @@ class TvLink {
       }
     } catch (_) {}
     await _persist();
+    if (selectedId == null && _known.length == 1) {
+      selectedId = _known.keys.first;
+      await _persist();
+    }
+  }
+
+  /// Reattempt only while the app is active. Background OS restrictions apply.
+  void setActive(bool active) {
+    _active = active;
+    if (!active) {
+      _retryTimer?.cancel();
+    } else if (!connected && selectedId != null) {
+      _retryIndex = 0;
+      _scheduleRetry(immediate:true);
+    }
+  }
+
+  void _scheduleRetry({bool immediate=false}) {
+    if (!_active || selectedId == null || connected || _userSwitching) return;
+    if (_retryTimer?.isActive == true || reconnecting) return;
+    const seconds = [2, 4, 8, 15, 30];
+    final delay = immediate ? 0 : seconds[_retryIndex.clamp(0, seconds.length-1)];
+    if (!immediate && _retryIndex < seconds.length-1) _retryIndex++;
+    _retryTimer = Timer(Duration(seconds:delay), () async {
+      _retryTimer = null;
+      if (!_active || connected || _userSwitching) return;
+      await reconnectPreferred();
+      if (!connected) _scheduleRetry();
+    });
   }
 
   Future<void> _persist() async {
@@ -68,14 +110,30 @@ class TvLink {
   }
 
   Future<void> connect(TvDevice device, Future<String> Function() askPin) async {
-    _known[device.id] = device;
-    await _persist();
-    await remote.connect(device, onPairingCode: askPin);
-    if (!connected) throw StateError('The TV did not confirm the connection');
-    connectedName = device.name;
-    selectedId = device.id;
-    await _persist();
-    _states.add(remote.state);
+    _retryTimer?.cancel();
+    _userSwitching = true;
+    // Let an existing reconnect finish before the user selects another TV.
+    if (_ongoingReconnect != null) {
+      try { await _ongoingReconnect; } catch (_) {}
+    }
+    try {
+      _known[device.id] = device;
+      await _persist();
+      connectionMessage = 'Connecting to ${device.name}';
+      _states.add(remote.state);
+      await remote.connect(device, onPairingCode: askPin);
+      if (!connected) throw StateError('The TV did not confirm the connection');
+      connectedName = device.name;
+      selectedId = device.id;
+      _retryIndex = 0;
+      connectionMessage = 'Connected';
+      lastConnected = DateTime.now();
+      await _persist();
+      _states.add(remote.state);
+    } finally {
+      _userSwitching = false;
+      if (!connected) _scheduleRetry();
+    }
   }
 
   Future<void> connectIp(String ip, Future<String> Function() askPin) async {
@@ -90,26 +148,56 @@ class TvLink {
     await connect(device,askPin);
   }
 
-  Future<bool> reconnectPreferred() async {
-    if (connected || selectedId == null || reconnecting) return connected;
-    final device=_known[selectedId];
-    if(device == null) return false;
+  /// Silent reconnection using the existing per-device pairing certificate.
+  /// Never invokes a pairing dialog; retry only on a future attempt if offline.
+  Future<bool> reconnectPreferred() {
+    if (connected) return Future.value(true);
+    if (selectedId == null || _userSwitching) return Future.value(false);
+    if (_ongoingReconnect != null) return _ongoingReconnect!;
+    final future = _reconnectAttempt();
+    _ongoingReconnect = future;
+    return future.whenComplete(() { _ongoingReconnect = null; });
+  }
+
+  Future<bool> _reconnectAttempt() async {
+    final device = _known[selectedId];
+    if (device == null) return false;
     reconnecting = true;
+    connectionMessage = 'Reconnecting to ${device.name}';
+    _states.add(remote.state);
     try {
-      // With an existing certificate, the library does not ask for a PIN.
-      // If credentials are lost, do not open an unexpected pairing dialog.
+      // On a saved certificate, the remote library reconnects without a PIN.
       await remote.connect(device, onPairingCode: () async {
-        throw StateError('Pairing code required. Select the TV to pair again.');
+        throw StateError('Pairing credentials expired. Re-pair this TV once.');
       }).timeout(const Duration(seconds: 12));
-      if(connected){connectedName=device.name;_states.add(remote.state);}
-      return connected;
-    } catch (_) {return false;}
-    finally {reconnecting = false;}
+      if (connected) {
+        connectedName = device.name;
+        lastConnected = DateTime.now();
+        connectionMessage = 'Connected';
+        _retryIndex = 0;
+        _retryTimer?.cancel();
+        _states.add(remote.state);
+        return true;
+      }
+      connectionMessage = 'TV not responding. Retrying automatically';
+    } catch(e) {
+      final message = e.toString();
+      connectionMessage = message.contains('Pairing credentials expired')
+        ? 'TV pairing expired; tap to pair again'
+        : 'TV offline or unreachable. Reconnecting automatically';
+    } finally {
+      reconnecting = false;
+      _states.add(remote.state);
+    }
+    if (_active) _scheduleRetry();
+    return false;
   }
 
   void disconnect() {
+    _retryTimer?.cancel();
     remote.disconnect();
     connectedName=null;
+    connectionMessage = 'Disconnected';
     _states.add(remote.state);
   }
 
