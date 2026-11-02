@@ -216,7 +216,7 @@ class _TvAppsPanelState extends State<TvAppsPanel> {
                 if(i<apps.length-1)const PopupMenuItem(value:'down',child:Text('Move down')),
                 const PopupMenuItem(value:'delete',child:Text('Remove'))
               ])
-          ]))));
+          ])));
       }),
       const SizedBox(height:8),
       OutlinedButton.icon(onPressed:()=>editApp(),icon:const Icon(Icons.add),
