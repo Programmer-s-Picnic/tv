@@ -86,7 +86,7 @@ class TvLink {
     if (!_active || selectedId == null || connected || _userSwitching) return;
     if (_retryTimer?.isActive == true || reconnecting) return;
     const seconds = [2, 4, 8, 15, 30];
-    final delay = immediate ? 0 : seconds[_retryIndex.clamp(0, seconds.length-1)];
+    final delay = immediate ? 0 : seconds[_retryIndex.clamp(0, seconds.length-1).toInt()];
     if (!immediate && _retryIndex < seconds.length-1) _retryIndex++;
     _retryTimer = Timer(Duration(seconds:delay), () async {
       _retryTimer = null;
