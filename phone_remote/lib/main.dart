@@ -176,20 +176,33 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    }
  }
  Future<void> launchYouTube({bool alternate=false}) async {
+   final messenger=ScaffoldMessenger.of(context);
+   messenger.removeCurrentSnackBar();
+   messenger.clearSnackBars();
    try {
      await TvLink.instance.openYouTube(alternate:alternate);
      if(!mounted)return;
-     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-       duration:const Duration(seconds:7),
+     final current=ScaffoldMessenger.of(context);
+     current.hideCurrentMaterialBanner();
+     current.clearSnackBars();
+     current.showSnackBar(SnackBar(
+       behavior:SnackBarBehavior.floating,
+       margin:const EdgeInsets.fromLTRB(16,0,16,12),
+       duration:const Duration(seconds:2),
        content:Text(alternate
-         ?'Alternative YouTube link sent. Check the TV screen.'
-         :'YouTube launch requested. If the TV does not respond, try Alternative launch.'),
-       action:alternate?null:SnackBarAction(label:'Try alternative',onPressed:(){
-         launchYouTube(alternate:true);
-       })));
+         ?'Alternative YouTube request sent.'
+         :'YouTube request sent. Try the alternative button if needed.'),
+     ));
    } catch(e) {
-     if(mounted) ScaffoldMessenger.of(context).showSnackBar(
-       SnackBar(content:Text('YouTube launch failed: $e'),duration:const Duration(seconds:6)));
+     if(mounted) {
+       final current=ScaffoldMessenger.of(context);
+       current.clearSnackBars();
+       current.showSnackBar(SnackBar(
+         behavior:SnackBarBehavior.floating,
+         margin:const EdgeInsets.fromLTRB(16,0,16,12),
+         duration:const Duration(seconds:3),
+         content:Text('YouTube: $e',maxLines:2,overflow:TextOverflow.ellipsis)));
+     }
    }
  }
  Future<String> pairingPin() async {
@@ -441,7 +454,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V0.9'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V0.9.1'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
