@@ -178,6 +178,15 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
        content:Text('Cannot reach TV: $e'),duration:const Duration(seconds:6)));
    }
  }
+ Future<void> prepareYouTubeVoiceSearch() async {
+   if (!TvLink.instance.connected && !await TvLink.instance.reconnectPreferred()) {
+     throw StateError('Saved TV is offline. Connect the TV first.');
+   }
+   // Opening the YouTube app is separate from Android TV's microphone service.
+   // Not all TVs will pass the voice query to the currently open app.
+   await TvLink.instance.openYouTube();
+   await Future<void>.delayed(const Duration(milliseconds: 1500));
+ }
  Future<void> launchYouTube({bool alternate=false}) async {
    final messenger=ScaffoldMessenger.of(context);
    messenger.removeCurrentSnackBar();
@@ -428,6 +437,17 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
      onPressed:manageSavedTvs,icon:const Icon(Icons.edit_note,color:blue)),
    const Icon(Icons.expand_more_rounded,color:blue),
  ]))),
+  const SizedBox(height:12),
+  panel(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+    const Text('YouTube voice search',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold,color:ink)),
+    const SizedBox(height:5),
+    const Text('Hold the button to open YouTube and stream your phone microphone to Android TV voice search. TV support varies.',style:TextStyle(fontSize:12,color:Colors.black54)),
+    const SizedBox(height:10),
+    TvVoicePanel(youtubeMode:true,beforeStart:() async {
+      if(listening) {await speech.stop(); if(mounted)setState(()=>listening=false);}
+      await prepareYouTubeVoiceSearch();
+    }),
+  ])),
   const SizedBox(height:12),
   panel(TvVoicePanel(beforeStart:() async {
     if(listening) {
