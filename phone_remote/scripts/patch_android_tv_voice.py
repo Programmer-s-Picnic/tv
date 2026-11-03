@@ -127,7 +127,7 @@ ctrl = replace_once(
     var value = 0;
     for (var i = start; i < bytes.length && i < start + 10; i++) {
       value |= (bytes[i] & 127) << (7 * (i - start));
-      if (bytes[i] & 128 == 0) return (value, i + 1);
+      if ((bytes[i] & 128) == 0) return (value, i + 1);
     }
     return null;
   }
