@@ -100,7 +100,7 @@ jobs:
           APK_SIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
           test -n "$APK_SIGNER"
           "$APK_SIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
-          APK_SHA=$("$APK_SIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr '[:lower:]' '[:upper:]')
+          APK_SHA=$("$APK_SIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | sed -n 's/^.*certificate SHA-256 digest: //p' | tr '[:lower:]' '[:upper:]')
           EXPECTED_SHA=F890F03B7217ADFC59A2ABA5D4131D904AC1B403A6D7D1F0752CA9F9A9FC22A9
           test "$APK_SHA" = "$EXPECTED_SHA"
           jarsigner -verify build/app/outputs/bundle/release/app-release.aab
