@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tv_connection.dart';
+import 'youtube_shortcuts_panel.dart';
 
 /// Per-TV configurable shortcuts. Launching a link is best-effort: Android TV
 /// Remote v2 does not acknowledge which application actually opened.
@@ -223,7 +224,11 @@ class _TvAppsPanelState extends State<TvAppsPanel> {
         label:const Text('Add custom app shortcut')),
       const SizedBox(height:8),
       const Text('Shortcuts request a URL launch using Android TV Remote v2. Some installed apps may not accept it; a TV-side launcher is needed for reliable package-based launches.',
-        style:TextStyle(fontSize:11,color:Colors.black54))
+        style:TextStyle(fontSize:11,color:Colors.black54)),
+      const SizedBox(height:20),
+      const Divider(),
+      const SizedBox(height:12),
+      const YoutubeShortcutsPanel(),
     ]);
   }
 }
