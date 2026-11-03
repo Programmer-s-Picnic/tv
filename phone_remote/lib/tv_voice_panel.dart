@@ -9,7 +9,8 @@ import 'tv_connection.dart';
 /// TV voice search must explicitly acknowledge a voice session first.
 class TvVoicePanel extends StatefulWidget {
   final Future<void> Function()? beforeStart;
-  const TvVoicePanel({super.key, this.beforeStart});
+  final bool youtubeMode;
+  const TvVoicePanel({super.key, this.beforeStart, this.youtubeMode = false});
   @override
   State<TvVoicePanel> createState() => _TvVoicePanelState();
 }
@@ -62,7 +63,7 @@ class _TvVoicePanelState extends State<TvVoicePanel>
   Future<void> begin() async {
     if (starting || streaming || !desired) return;
     starting = true;
-    showStatus('Connecting to TV voice search…');
+    showStatus(widget.youtubeMode ? 'Opening YouTube voice search…' : 'Connecting to TV voice search…');
     try {
       if (!TvLink.instance.connected) {
         if (!await TvLink.instance.reconnectPreferred()) {
@@ -163,8 +164,8 @@ class _TvVoicePanelState extends State<TvVoicePanel>
         Icon(active ? Icons.mic : Icons.mic_none_rounded,
           color: active ? Colors.red : blue, size: 28),
         const SizedBox(width: 10),
-        const Expanded(child: Text('Direct TV microphone',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17))),
+        Expanded(child: Text(widget.youtubeMode ? 'YouTube · Phone microphone' : 'Direct TV microphone',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17))),
         if (active) const Text('LIVE',
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
       ]),
@@ -208,9 +209,10 @@ class _TvVoicePanelState extends State<TvVoicePanel>
       Text(status, style: TextStyle(fontSize: 12,
         color: active ? Colors.red.shade800 : Colors.black54)),
       const SizedBox(height: 5),
-      const Text('TV voice search only. Uses 8 kHz mono PCM over your paired Wi-Fi remote connection. '
-        'If your TV does not support voice sessions, use Speak to Type below.',
-        style: TextStyle(fontSize: 11, color: Colors.black54)),
+      Text(widget.youtubeMode
+        ? 'Opens YouTube, then requests a TV voice session. Your TV may route the request to its system assistant instead of YouTube. If unsupported, use Speak to Type.'
+        : 'TV voice search uses 8 kHz mono PCM over the paired Wi-Fi connection. If unsupported, use Speak to Type below.',
+        style: const TextStyle(fontSize: 11, color: Colors.black54)),
     ]);
   }
 }
