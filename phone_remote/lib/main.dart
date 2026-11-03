@@ -7,6 +7,7 @@ import 'tv_connection.dart';
 import 'bluetooth_power.dart';
 import 'tv_install_panel.dart';
 import 'tv_apps_panel.dart';
+import 'tv_voice_panel.dart';
 import 'package:android_tv_remote/android_tv_remote.dart';
 const blue=Color(0xff2563eb),ink=Color(0xff192b4e);
 Future<void> main() async { WidgetsFlutterBinding.ensureInitialized(); await TvLink.instance.initialize(); runApp(const RemoteApp()); }
@@ -428,11 +429,18 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    const Icon(Icons.expand_more_rounded,color:blue),
  ]))),
   const SizedBox(height:12),
+  panel(TvVoicePanel(beforeStart:() async {
+    if(listening) {
+      await speech.stop();
+      if(mounted) setState(() => listening=false);
+    }
+  })),
+  const SizedBox(height:12),
   panel(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
     Row(children:[
       Icon(listening?Icons.mic:Icons.mic_none_rounded,color:blue,size:28),
       const SizedBox(width:10),
-      const Expanded(child:Text('Speak using your phone',style:TextStyle(fontWeight:FontWeight.bold,color:ink))),
+      const Expanded(child:Text('Speak to Type (fallback)',style:TextStyle(fontWeight:FontWeight.bold,color:ink))),
       FilledButton.tonalIcon(onPressed:toggleMicrophone,
         icon:Icon(listening?Icons.stop_circle_outlined:Icons.mic),
         label:Text(listening?'Stop':'Speak'))
@@ -445,7 +453,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
         label:const Text('Send spoken words to TV'))
     ],
     const SizedBox(height:6),
-    const Text('Uses your phone\'s speech recognition to type into a TV text field. It does not stream microphone audio or activate Google Assistant on TV.',
+    const Text('Converts speech to text on the phone. For direct TV voice search, use Hold to Talk above.',
       style:TextStyle(fontSize:11,color:Colors.black54))
   ])),
   const SizedBox(height:15),panel(Column(children:[
@@ -572,7 +580,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V1.3'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V1.4'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
