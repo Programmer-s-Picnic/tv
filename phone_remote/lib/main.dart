@@ -8,6 +8,8 @@ import 'bluetooth_power.dart';
 import 'tv_install_panel.dart';
 import 'tv_apps_panel.dart';
 import 'tv_voice_panel.dart';
+import 'youtube_history_panel.dart';
+import 'youtube_shortcuts_panel.dart';
 import 'package:android_tv_remote/android_tv_remote.dart';
 const blue=Color(0xff2563eb),ink=Color(0xff192b4e);
 Future<void> main() async { WidgetsFlutterBinding.ensureInitialized(); await TvLink.instance.initialize(); runApp(const RemoteApp()); }
@@ -193,6 +195,15 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    messenger.clearSnackBars();
    try {
      await TvLink.instance.openYouTube(alternate:alternate);
+     try {
+       await YoutubeHistoryStore.record(
+         title:'YouTube app opened',
+         url:alternate ? 'https://www.youtube.com/' : 'https://www.youtube.com/tv',
+         type:'App',source:'Open YouTube button',
+       );
+     } catch (_) {
+       // Local history storage must not affect TV commands.
+     }
      if(!mounted)return;
      final current=ScaffoldMessenger.of(context);
      current.hideCurrentMaterialBanner();
@@ -337,6 +348,22 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
      body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
        child:const TvAppsPanel())))));
  }
+ void openYouTubeCenter() {
+   Navigator.push(context,MaterialPageRoute(builder:(ctx)=>
+     DefaultTabController(length:2,child:Scaffold(
+       appBar:AppBar(
+         title:const Text('YouTube · History & Favourites'),
+         bottom:const TabBar(tabs:[
+           Tab(icon:Icon(Icons.history_rounded),text:'History'),
+           Tab(icon:Icon(Icons.favorite_outline),text:'Favourites')
+         ])),
+       body:const SafeArea(child:TabBarView(children:[
+         YoutubeHistoryPanel(),
+         SingleChildScrollView(padding:EdgeInsets.all(16),
+           child:YoutubeShortcutsPanel()),
+       ])),
+     ))));
+ }
  Future<void> pairTv() async {
    if(findingTv)return;
    await showTvPicker(scan:TvLink.instance.knownDevices.isEmpty);
@@ -419,6 +446,11 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
   Padding(padding:const EdgeInsets.only(bottom:12),child:SizedBox(width:double.infinity,
     child:FilledButton.tonalIcon(onPressed:openMyTvApps,icon:const Icon(Icons.apps_rounded),
       label:const Text('My TV Apps · Shortcuts')))),
+  Padding(padding:const EdgeInsets.only(bottom:12),child:SizedBox(
+    width:double.infinity,
+    child:OutlinedButton.icon(onPressed:openYouTubeCenter,
+      icon:const Icon(Icons.history_rounded,color:Color(0xffda1729)),
+      label:const Text('YouTube History & Favourites')))),
   panel(InkWell(onTap:pairTv,borderRadius:BorderRadius.circular(16),child:Row(children:[
    Icon(TvLink.instance.connected?Icons.tv_rounded:Icons.tv_outlined,color:blue,size:34),
    const SizedBox(width:12),
@@ -596,11 +628,13 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
   return Scaffold(appBar:AppBar(title:const Text("Champak's TV Remote",
    style:TextStyle(fontWeight:FontWeight.bold,color:ink)),actions:[
     IconButton(tooltip:'My TV Apps',onPressed:openMyTvApps,icon:const Icon(Icons.apps,color:blue)),
+    IconButton(tooltip:'YouTube History',onPressed:openYouTubeCenter,
+      icon:const Icon(Icons.smart_display_rounded,color:Color(0xffda1729))),
     IconButton(onPressed:pairTv,icon:Icon(TvLink.instance.connected?Icons.cast_connected:Icons.cast,color:blue))]),
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V1.4'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V1.6'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
