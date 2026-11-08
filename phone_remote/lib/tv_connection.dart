@@ -308,6 +308,10 @@ class TvLink {
     remote.sendText(value);
   }
 
+  /// Send the TV editor's Select All + Delete sequence without inserting text.
+  /// A remote-only connection cannot confirm whether the editor obeyed it.
+  Future<void> clearText() => replaceText('');
+
   /// Replace the focused TV input's contents rather than appending.
   ///
   /// Remote v2 exposes key events and text injection, but cannot directly
