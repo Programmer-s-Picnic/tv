@@ -26,6 +26,7 @@ jobs:
           set -euo pipefail
           flutter create --platforms android --org live.learnwithchampak .
           python3 scripts/configure_android.py
+          sed -i 's@services.gradle.org/distributions/gradle-9.3.1-all.zip@downloads.gradle.org/distributions/gradle-9.3.1-bin.zip@' android/gradle/wrapper/gradle-wrapper.properties
           flutter pub get
           python3 scripts/patch_android_tv_voice.py
           python3 -m pip install --user cairosvg pillow
