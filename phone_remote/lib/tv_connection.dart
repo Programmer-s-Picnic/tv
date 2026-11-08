@@ -307,4 +307,41 @@ class TvLink {
     if(!connected) throw StateError('No TV connected');
     remote.sendText(value);
   }
+
+  /// Replace the focused TV input's contents rather than appending.
+  ///
+  /// Remote v2 exposes key events and text injection, but cannot directly
+  /// inspect/edit TV text fields. Ctrl+A followed by Delete is the standard
+  /// select-all mechanism when the focused TV editor supports it.
+  /// If a TV app/keyboard ignores Ctrl+A, replacement cannot be guaranteed
+  /// without a TV-side accessibility/IME companion.
+  bool _replacingText = false;
+  Future<void> replaceText(String value) async {
+    if (_replacingText) {
+      throw StateError('Text replacement is already in progress.');
+    }
+    if (!connected) throw StateError('No TV connected');
+    _replacingText = true;
+    var controlHeld = false;
+    try {
+      remote.sendKeyPress(RemoteKeyCode.ctrlLeft);
+      controlHeld = true;
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      remote.sendKey(RemoteKeyCode.a);
+      await Future<void>.delayed(const Duration(milliseconds: 130));
+      remote.sendKeyRelease(RemoteKeyCode.ctrlLeft);
+      controlHeld = false;
+      await Future<void>.delayed(const Duration(milliseconds: 130));
+      remote.sendKey(RemoteKeyCode.del);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      // An empty string intentionally clears the field.
+      if (value.isNotEmpty) remote.sendText(value);
+    } finally {
+      if (controlHeld && connected) {
+        try { remote.sendKeyRelease(RemoteKeyCode.ctrlLeft); }
+        catch (_) {}
+      }
+      _replacingText = false;
+    }
+  }
 }
