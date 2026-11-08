@@ -510,7 +510,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
       SelectableText(spoken,style:const TextStyle(fontSize:15)),
       const SizedBox(height:8),
       FilledButton.icon(onPressed:sendSpokenText,icon:const Icon(Icons.send),
-        label:const Text('Send spoken words to TV'))
+        label:const Text('Replace TV text with spoken words'))
     ],
     const SizedBox(height:6),
     const Text('Converts speech to text on the phone. For direct TV voice search, use Hold to Talk above.',
