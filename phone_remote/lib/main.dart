@@ -529,6 +529,13 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    Row(children:[Expanded(child:keyButton(Icons.volume_down,'Vol -')),const SizedBox(width:7),
     Expanded(child:keyButton(Icons.play_arrow_rounded,'Media')),const SizedBox(width:7),
     Expanded(child:keyButton(Icons.volume_up,'Vol +'))]),
+   const SizedBox(height:9),
+   SizedBox(width:double.infinity,child:FilledButton.tonalIcon(
+     onPressed:()=>unavailable('Mute / Unmute'),
+     icon:const Icon(Icons.volume_off_rounded),
+     label:const Text('Mute / Unmute'),
+     style:FilledButton.styleFrom(
+       padding:const EdgeInsets.symmetric(vertical:13)))),
    const SizedBox(height:12),
    SizedBox(width:double.infinity,child:FilledButton.icon(
      style:FilledButton.styleFrom(backgroundColor:const Color(0xffda1729),
