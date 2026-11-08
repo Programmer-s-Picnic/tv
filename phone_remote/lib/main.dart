@@ -96,7 +96,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Microphone error: $e')));}
    }
  }
- void sendSpokenText(){
+ Future<void> sendSpokenText() async {
    if(spoken.trim().isEmpty)return;
    if(!TvLink.instance.connected){
      ScaffoldMessenger.of(context).showSnackBar(
@@ -104,10 +104,11 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
      return;
    }
    try{
-     TvLink.instance.text(spoken.trim());
+     await TvLink.instance.replaceText(spoken.trim());
+     if(!mounted)return;
      ScaffoldMessenger.of(context).showSnackBar(
-       const SnackBar(content:Text('Recognized speech sent to TV text field')));
-   }catch(e){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Voice text: $e')));}
+       const SnackBar(content:Text('Replace-all command sent to focused TV field.')));
+   }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Voice text: $e')));}
  }
  Future<void> bluetoothPowerDialog() async {
    Map<String,dynamic> info = {};
@@ -419,11 +420,18 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
        content:Text('Connection failed: $e'),duration:const Duration(seconds:6)));}
    }
  }
- void sendTypedText() {
+ Future<void> sendTypedText() async {
    if(!TvLink.instance.connected){unavailable('Send text');return;}
-   try{TvLink.instance.text(tvText.text);ScaffoldMessenger.of(context).showSnackBar(
-     const SnackBar(content:Text('Text sent to TV')));}
-   catch(e){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not send text: $e')));}
+   final replacement=tvText.text;
+   try {
+     await TvLink.instance.replaceText(replacement);
+     if(!mounted)return;
+     ScaffoldMessenger.of(context).showSnackBar(
+       const SnackBar(content:Text('Replace-all command sent. Check the TV text field.')));
+   } catch(e) {
+     if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content:Text('Could not replace TV text: $e')));
+   }
  }
  void swipeTv(DragUpdateDetails d) {
    if(!TvLink.instance.connected)return;
@@ -568,7 +576,12 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
   const SizedBox(height:10),TextField(controller:tvText,minLines:3,maxLines:5,
    decoration:InputDecoration(hintText:'Enter URL, search or message')),
   const SizedBox(height:12),FilledButton.icon(onPressed:sendTypedText,
-   icon:const Icon(Icons.send),label:const Text('Send to TV'))]));
+   icon:const Icon(Icons.find_replace_rounded),label:const Text('Replace Text on TV')),
+  const SizedBox(height:7),
+  const Text('First select an editable search or text field on the TV. '
+    'This sends Select All, Delete, then the new text. '
+    'Some TV apps may not support remote Select All.',
+    style:TextStyle(fontSize:11,color:Colors.black54))]));
  Widget browser()=>panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
   const Text("Champak's TV Browser",style:TextStyle(fontSize:21,fontWeight:FontWeight.bold,color:ink)),
   const SizedBox(height:13),GridView.count(shrinkWrap:true,
@@ -641,7 +654,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V1.6.1'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V1.6.2'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
