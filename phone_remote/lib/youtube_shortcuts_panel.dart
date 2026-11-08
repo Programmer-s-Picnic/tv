@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tv_connection.dart';
+import 'youtube_history_panel.dart';
 
 /// YouTube favourites are stored locally for the selected television.
 /// Sending a deep link is best-effort; Android TV Remote v2 has no app-open ACK.
@@ -221,6 +222,17 @@ class _YoutubeShortcutsPanelState extends State<YoutubeShortcutsPanel> {
       // Android TV Remote v2 sends launch requests, not guaranteed launches.
       // A web link is the fallback request; it cannot force a particular browser.
       TvLink.instance.remote.launchApp(link);
+      // Record what the remote requested, not a claim of confirmed playback.
+      try {
+        await YoutubeHistoryStore.record(
+          title: item['name'] ?? 'YouTube shortcut',
+          url: link,
+          type: item['type'] ?? 'Video',
+          source: 'YouTube Favourites',
+        );
+      } catch (_) {
+        // A local history write failure must not misreport TV launch status.
+      }
       showMessage(webFallback
         ? 'Web link requested on TV. Choose the TV browser if prompted.'
         : '${item['type']} launch requested. Check the television.');
