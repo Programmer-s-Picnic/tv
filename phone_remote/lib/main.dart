@@ -33,6 +33,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
  bool findingTv=false;
  final stt.SpeechToText speech=stt.SpeechToText();
  bool listening=false;
+ bool clearingTvText=false;
  String spoken='';
  final tvText=TextEditingController();
  DateTime lastSwipe=DateTime.fromMillisecondsSinceEpoch(0);
@@ -96,18 +97,17 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Microphone error: $e')));}
    }
  }
- Future<void> sendSpokenText() async {
-   if(spoken.trim().isEmpty)return;
+ void sendSpokenText() {
+   if(clearingTvText || spoken.trim().isEmpty)return;
    if(!TvLink.instance.connected){
      ScaffoldMessenger.of(context).showSnackBar(
        const SnackBar(content:Text('Connect the TV first, then select a search field.')));
      return;
    }
    try{
-     await TvLink.instance.replaceText(spoken.trim());
-     if(!mounted)return;
+     TvLink.instance.text(spoken.trim());
      ScaffoldMessenger.of(context).showSnackBar(
-       const SnackBar(content:Text('Replace-all command sent to focused TV field.')));
+       const SnackBar(content:Text('Spoken words sent to focused TV field.')));
    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Voice text: $e')));}
  }
  Future<void> bluetoothPowerDialog() async {
@@ -420,17 +420,36 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
        content:Text('Connection failed: $e'),duration:const Duration(seconds:6)));}
    }
  }
- Future<void> sendTypedText() async {
-   if(!TvLink.instance.connected){unavailable('Send text');return;}
-   final replacement=tvText.text;
-   try {
-     await TvLink.instance.replaceText(replacement);
-     if(!mounted)return;
-     ScaffoldMessenger.of(context).showSnackBar(
-       const SnackBar(content:Text('Replace-all command sent. Check the TV text field.')));
-   } catch(e) {
+ Future<void> clearTvText() async {
+   if(clearingTvText)return;
+   if(!TvLink.instance.connected){unavailable('Clear TV text');return;}
+   setState(()=>clearingTvText=true);
+   try{
+     await TvLink.instance.clearText();
      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-       SnackBar(content:Text('Could not replace TV text: $e')));
+       const SnackBar(content:Text('Clear command sent. Check the TV text field.')));
+   }catch(e){
+     if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content:Text('Could not clear TV text: $e')));
+   }finally{
+     if(mounted)setState(()=>clearingTvText=false);
+   }
+ }
+ void sendTypedText(){
+   if(clearingTvText)return;
+   if(!TvLink.instance.connected){unavailable('Send text');return;}
+   if(tvText.text.isEmpty){
+     ScaffoldMessenger.of(context).showSnackBar(
+       const SnackBar(content:Text('Enter text first, or use Clear TV Text.')));
+     return;
+   }
+   try{
+     TvLink.instance.text(tvText.text);
+     ScaffoldMessenger.of(context).showSnackBar(
+       const SnackBar(content:Text('Text sent to focused TV field.')));
+   }catch(e){
+     if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(content:Text('Could not send TV text: $e')));
    }
  }
  void swipeTv(DragUpdateDetails d) {
@@ -509,8 +528,17 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
       const SizedBox(height:8),
       SelectableText(spoken,style:const TextStyle(fontSize:15)),
       const SizedBox(height:8),
-      FilledButton.icon(onPressed:sendSpokenText,icon:const Icon(Icons.send),
-        label:const Text('Replace TV text with spoken words'))
+      Row(children:[
+        Expanded(child:OutlinedButton.icon(
+          onPressed:clearingTvText?null:clearTvText,
+          icon:const Icon(Icons.backspace_outlined),
+          label:const Text('Clear TV Text'))),
+        const SizedBox(width:8),
+        Expanded(child:FilledButton.icon(
+          onPressed:clearingTvText?null:sendSpokenText,
+          icon:const Icon(Icons.send),
+          label:const Text('Send'))),
+      ])
     ],
     const SizedBox(height:6),
     const Text('Converts speech to text on the phone. For direct TV voice search, use Hold to Talk above.',
@@ -575,12 +603,22 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
   const Text('Phone keyboard',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold,color:ink)),
   const SizedBox(height:10),TextField(controller:tvText,minLines:3,maxLines:5,
    decoration:InputDecoration(hintText:'Enter URL, search or message')),
-  const SizedBox(height:12),FilledButton.icon(onPressed:sendTypedText,
-   icon:const Icon(Icons.find_replace_rounded),label:const Text('Replace Text on TV')),
-  const SizedBox(height:7),
-  const Text('First select an editable search or text field on the TV. '
-    'This sends Select All, Delete, then the new text. '
-    'Some TV apps may not support remote Select All.',
+  const SizedBox(height:12),
+  Row(children:[
+    Expanded(child:OutlinedButton.icon(
+      onPressed:clearingTvText?null:clearTvText,
+      icon:const Icon(Icons.backspace_outlined),
+      label:Text(clearingTvText?'Clearing…':'Clear TV Text'))),
+    const SizedBox(width:10),
+    Expanded(child:FilledButton.icon(
+      onPressed:clearingTvText?null:sendTypedText,
+      icon:const Icon(Icons.send_rounded),
+      label:const Text('Send Text'))),
+  ]),
+  const SizedBox(height:8),
+  const Text('Select the TV text field first. Clear TV Text attempts Select All + Delete. '
+    'Send Text inserts only the entered text, without clearing. Some TV apps '
+    'do not support remote Select All.',
     style:TextStyle(fontSize:11,color:Colors.black54))]));
  Widget browser()=>panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
   const Text("Champak's TV Browser",style:TextStyle(fontSize:21,fontWeight:FontWeight.bold,color:ink)),
@@ -654,7 +692,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V1.6.2'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V1.6.3'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
