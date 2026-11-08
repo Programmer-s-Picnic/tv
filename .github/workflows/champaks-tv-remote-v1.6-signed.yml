@@ -28,15 +28,9 @@ jobs:
           python3 scripts/configure_android.py
           # Avoid transient GitHub Release redirects for the Gradle ZIP.
           # Use Gradle's official distribution CDN and retry downloads.
-          python3 - <<'PY'
-          import pathlib, re
-          properties = pathlib.Path('android/gradle/wrapper/gradle-wrapper.properties')
-          data = properties.read_text()
-          match = re.search(r'gradle-([0-9.]+)-(?:all|bin)\\.zip',data)
-          if not match:
-              raise SystemExit('Unrecognized Gradle wrapper distribution')
-          version = match.group(1)
-          data = re.sub(r'^distributionUrl=.*
+          sed -i 's@services.gradle.org/distributions/gradle-9.3.1-all.zip@downloads.gradle.org/distributions/gradle-9.3.1-bin.zip@' android/gradle/wrapper/gradle-wrapper.properties
+          printf 'networkTimeout=120000\nretries=3\nretryBackOffMs=3000\n' >> android/gradle/wrapper/gradle-wrapper.properties
+          flutter pub get
           python3 scripts/patch_android_tv_voice.py
           python3 -m pip install --user cairosvg pillow
           python3 scripts/generate_branding.py
