@@ -26,6 +26,220 @@ jobs:
           set -euo pipefail
           flutter create --platforms android --org live.learnwithchampak .
           python3 scripts/configure_android.py
+          # Avoid transient GitHub Release redirects for the Gradle ZIP.
+          # Use Gradle's official distribution CDN and retry downloads.
+          python3 - <<'PY'
+          import pathlib, re
+          properties = pathlib.Path('android/gradle/wrapper/gradle-wrapper.properties')
+          data = properties.read_text()
+          match = re.search(r'gradle-([0-9.]+)-(?:all|bin)\\.zip',data)
+          if not match:
+              raise SystemExit('Unrecognized Gradle wrapper distribution')
+          version = match.group(1)
+          data = re.sub(r'^distributionUrl=.*
+          python3 scripts/patch_android_tv_voice.py
+          python3 -m pip install --user cairosvg pillow
+          python3 scripts/generate_branding.py
+          dart run flutter_launcher_icons
+      - name: Configure original Play upload certificate
+        env:
+          UPLOAD_KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, base64, subprocess, re
+          required = ['UPLOAD_KEYSTORE_B64','UPLOAD_KEYSTORE_PASSWORD','UPLOAD_KEY_PASSWORD','UPLOAD_KEY_ALIAS']
+          absent = [x for x in required if not os.environ.get(x)]
+          if absent:
+              raise SystemExit('Missing signing secrets in Programmer-s-Picnic/tv: '+', '.join(absent))
+          if os.environ['UPLOAD_KEY_ALIAS'] != 'champak_remote_upload':
+              raise SystemExit('Incorrect upload key alias')
+          key = pathlib.Path('android/upload-key.p12')
+          key.write_bytes(base64.b64decode(os.environ['UPLOAD_KEYSTORE_B64'],validate=True))
+          result = subprocess.run([
+              'keytool','-list','-v','-storetype','PKCS12','-keystore',str(key),
+              '-alias',os.environ['UPLOAD_KEY_ALIAS'],
+              '-storepass',os.environ['UPLOAD_KEYSTORE_PASSWORD']],
+              capture_output=True,text=True,check=True)
+          match = re.search(r'SHA256:\s*((?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2})', result.stdout)
+          if not match:
+              raise SystemExit('Unable to read upload certificate fingerprint')
+          fingerprint = match.group(1).replace(':','').upper()
+          expected = 'F890F03B7217ADFC59A2ABA5D4131D904AC1B403A6D7D1F0752CA9F9A9FC22A9'
+          if fingerprint != expected:
+              raise SystemExit('Keystore does not match original v1.2/v1.3 Play upload certificate')
+          gradle = pathlib.Path('android/app/build.gradle.kts')
+          source = gradle.read_text()
+          if 'signingConfig = signingConfigs.getByName("debug")' not in source:
+              raise SystemExit('Unexpected Android release signing configuration; refusing default signing')
+          source = source.replace('android {', '''android {
+              signingConfigs {
+                  create("playUpload") {
+                      storeFile = file("../upload-key.p12")
+                      storeType = "PKCS12"
+                      storePassword = System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+                      keyAlias = System.getenv("UPLOAD_KEY_ALIAS")
+                      keyPassword = System.getenv("UPLOAD_KEY_PASSWORD")
+                  }
+              }
+          ''', 1)
+          source = source.replace('signingConfig = signingConfigs.getByName("debug")',
+                                  'signingConfig = signingConfigs.getByName("playUpload")')
+          gradle.write_text(source)
+          print('Original Play upload certificate fingerprint verified.')
+          PY
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: tv-remote-gradle-${{ runner.os }}-${{ hashFiles('phone_remote/pubspec.lock') }}
+          restore-keys: |
+            tv-remote-gradle-${{ runner.os }}-
+      - name: Build signed APK and AAB
+        env:
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          # Retry transient Gradle/Maven CDN errors; never skip signing checks.
+          for attempt in 1 2 3; do
+            if flutter build apk --release && flutter build appbundle --release; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            echo "Gradle download/build attempt $attempt failed; retrying."
+            sleep 15
+          done
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          test -s build/app/outputs/bundle/release/app-release.aab
+      - name: Validate signatures and checksums
+        env:
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          APK_SIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          test -n "$APK_SIGNER"
+          "$APK_SIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+          APK_SHA=$("$APK_SIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | sed -n 's/^.*certificate SHA-256 digest: //p' | tr '[:lower:]' '[:upper:]')
+          EXPECTED_SHA=F890F03B7217ADFC59A2ABA5D4131D904AC1B403A6D7D1F0752CA9F9A9FC22A9
+          test "$APK_SHA" = "$EXPECTED_SHA"
+          jarsigner -verify build/app/outputs/bundle/release/app-release.aab
+          keytool -printcert -jarfile build/app/outputs/bundle/release/app-release.aab | grep -F 'SHA256: F8:90:F0:3B:72:17:AD:FC:59:A2:AB:A5:D4:13:1D:90:4A:C1:B4:03:A6:D7:D1:F0:75:2C:A9:F9:A9:FC:22:A9'
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-release.apk release/Champaks_TV_Remote_v1.6_PLAY_UPLOAD_SIGNED.apk
+          cp build/app/outputs/bundle/release/app-release.aab release/Champaks_TV_Remote_v1.6_PLAY_UPLOAD_SIGNED.aab
+          sha256sum release/* > release/SHA256SUMS.txt
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Champaks-TV-Remote-v1.6-SIGNED-APK-AAB
+          path: phone_remote/release/*
+          retention-days: 30
+, 'distributionUrl=https\\\\://downloads.gradle.org/distributions/gradle-'+version+'-bin.zip',
+                        data, flags=re.MULTILINE)
+          for key, value in [('networkTimeout','120000'),('retries','3'),('retryBackOffMs','3000')]:
+              if re.search(r'^'+key+r'=',data,re.MULTILINE):
+                  data=re.sub(r'^'+key+r'=.*
+          python3 scripts/patch_android_tv_voice.py
+          python3 -m pip install --user cairosvg pillow
+          python3 scripts/generate_branding.py
+          dart run flutter_launcher_icons
+      - name: Configure original Play upload certificate
+        env:
+          UPLOAD_KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, base64, subprocess, re
+          required = ['UPLOAD_KEYSTORE_B64','UPLOAD_KEYSTORE_PASSWORD','UPLOAD_KEY_PASSWORD','UPLOAD_KEY_ALIAS']
+          absent = [x for x in required if not os.environ.get(x)]
+          if absent:
+              raise SystemExit('Missing signing secrets in Programmer-s-Picnic/tv: '+', '.join(absent))
+          if os.environ['UPLOAD_KEY_ALIAS'] != 'champak_remote_upload':
+              raise SystemExit('Incorrect upload key alias')
+          key = pathlib.Path('android/upload-key.p12')
+          key.write_bytes(base64.b64decode(os.environ['UPLOAD_KEYSTORE_B64'],validate=True))
+          result = subprocess.run([
+              'keytool','-list','-v','-storetype','PKCS12','-keystore',str(key),
+              '-alias',os.environ['UPLOAD_KEY_ALIAS'],
+              '-storepass',os.environ['UPLOAD_KEYSTORE_PASSWORD']],
+              capture_output=True,text=True,check=True)
+          match = re.search(r'SHA256:\s*((?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2})', result.stdout)
+          if not match:
+              raise SystemExit('Unable to read upload certificate fingerprint')
+          fingerprint = match.group(1).replace(':','').upper()
+          expected = 'F890F03B7217ADFC59A2ABA5D4131D904AC1B403A6D7D1F0752CA9F9A9FC22A9'
+          if fingerprint != expected:
+              raise SystemExit('Keystore does not match original v1.2/v1.3 Play upload certificate')
+          gradle = pathlib.Path('android/app/build.gradle.kts')
+          source = gradle.read_text()
+          if 'signingConfig = signingConfigs.getByName("debug")' not in source:
+              raise SystemExit('Unexpected Android release signing configuration; refusing default signing')
+          source = source.replace('android {', '''android {
+              signingConfigs {
+                  create("playUpload") {
+                      storeFile = file("../upload-key.p12")
+                      storeType = "PKCS12"
+                      storePassword = System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+                      keyAlias = System.getenv("UPLOAD_KEY_ALIAS")
+                      keyPassword = System.getenv("UPLOAD_KEY_PASSWORD")
+                  }
+              }
+          ''', 1)
+          source = source.replace('signingConfig = signingConfigs.getByName("debug")',
+                                  'signingConfig = signingConfigs.getByName("playUpload")')
+          gradle.write_text(source)
+          print('Original Play upload certificate fingerprint verified.')
+          PY
+      - name: Build signed APK and AAB
+        env:
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          flutter build apk --release
+          flutter build appbundle --release
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          test -s build/app/outputs/bundle/release/app-release.aab
+      - name: Validate signatures and checksums
+        env:
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          APK_SIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          test -n "$APK_SIGNER"
+          "$APK_SIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+          APK_SHA=$("$APK_SIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | sed -n 's/^.*certificate SHA-256 digest: //p' | tr '[:lower:]' '[:upper:]')
+          EXPECTED_SHA=F890F03B7217ADFC59A2ABA5D4131D904AC1B403A6D7D1F0752CA9F9A9FC22A9
+          test "$APK_SHA" = "$EXPECTED_SHA"
+          jarsigner -verify build/app/outputs/bundle/release/app-release.aab
+          keytool -printcert -jarfile build/app/outputs/bundle/release/app-release.aab | grep -F 'SHA256: F8:90:F0:3B:72:17:AD:FC:59:A2:AB:A5:D4:13:1D:90:4A:C1:B4:03:A6:D7:D1:F0:75:2C:A9:F9:A9:FC:22:A9'
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-release.apk release/Champaks_TV_Remote_v1.6_PLAY_UPLOAD_SIGNED.apk
+          cp build/app/outputs/bundle/release/app-release.aab release/Champaks_TV_Remote_v1.6_PLAY_UPLOAD_SIGNED.aab
+          sha256sum release/* > release/SHA256SUMS.txt
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Champaks-TV-Remote-v1.6-SIGNED-APK-AAB
+          path: phone_remote/release/*
+          retention-days: 30
+,key+'='+value,data,flags=re.MULTILINE)
+              else:
+                  data += '\\n'+key+'='+value
+          properties.write_text(data)
+          print('Gradle wrapper CDN configured: '+version)
+          PY
           flutter pub get
           python3 scripts/patch_android_tv_voice.py
           python3 -m pip install --user cairosvg pillow
