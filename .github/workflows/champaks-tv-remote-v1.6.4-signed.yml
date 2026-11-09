@@ -1,4 +1,4 @@
-name: Build signed Champak TV Remote v1.6.4 100 Deletes
+name: Build signed Champak TV Remote v1.6.4 single-character Delete
 on:
   workflow_dispatch:
   push:
