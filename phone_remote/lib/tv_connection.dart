@@ -308,35 +308,11 @@ class TvLink {
     remote.sendText(value);
   }
 
-  /// Clear the TV's focused input with 100 individual Backspace key events.
-  ///
-  /// Android TV Remote v2 does not offer a reliable "select all" or a way
-  /// to read the field contents. Move to the end first, then delete backward.
-  /// Some applications may intercept/ignore remote keyboard key events.
-  static const int clearKeyCount = 100;
-  bool _clearingText = false;
-
+  /// Delete exactly one character before the TV's current text cursor.
+  /// Each button press sends one Android KEYCODE_DEL (67) event.
   Future<void> clearText() async {
-    if (_clearingText) {
-      throw StateError('TV text clearing is already in progress.');
-    }
     if (!connected) throw StateError('No TV connected');
-    _clearingText = true;
-    try {
-      // Start erasing at the end rather than at the TV's cursor position.
-      remote.sendKey(RemoteKeyCode.moveEnd);
-      await Future<void>.delayed(const Duration(milliseconds: 120));
-      for (var i = 0; i < clearKeyCount; i++) {
-        if (!connected) {
-          throw StateError('TV disconnected during text clearing.');
-        }
-        remote.sendKey(RemoteKeyCode.del);
-        // Space events to avoid overwhelming slower Android TV input services.
-        await Future<void>.delayed(const Duration(milliseconds: 40));
-      }
-    } finally {
-      _clearingText = false;
-    }
+    remote.sendKey(RemoteKeyCode.del);
   }
 
   /// Optional combined operation for callers that really want both actions.
