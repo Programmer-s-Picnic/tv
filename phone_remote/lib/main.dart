@@ -427,7 +427,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    try{
      await TvLink.instance.clearText();
      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-       const SnackBar(content:Text('100 Delete presses sent. Check the TV text field.')));
+       const SnackBar(content:Text('One character Delete command sent.')));
    }catch(e){
      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
        SnackBar(content:Text('Could not clear TV text: $e')));
@@ -608,7 +608,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
     Expanded(child:OutlinedButton.icon(
       onPressed:clearingTvText?null:clearTvText,
       icon:const Icon(Icons.backspace_outlined),
-      label:Text(clearingTvText?'Deleting 100…':'Clear TV Text'))),
+      label:Text(clearingTvText?'Deleting…':'Delete'))),
     const SizedBox(width:10),
     Expanded(child:FilledButton.icon(
       onPressed:clearingTvText?null:sendTypedText,
@@ -616,9 +616,9 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
       label:const Text('Send Text'))),
   ]),
   const SizedBox(height:8),
-  const Text('Focus the TV text field first. Clear TV Text sends 100 '
-    'Backspace presses from the end of the field. Send Text inserts '
-    'the new text separately. TV app support may vary.',
+  const Text('Focus the TV text field first. Each Delete tap removes one '
+    'character before the cursor. Tap repeatedly as needed. '
+    'Send Text inserts text separately.',
     style:TextStyle(fontSize:11,color:Colors.black54))]));
  Widget browser()=>panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
   const Text("Champak's TV Browser",style:TextStyle(fontSize:21,fontWeight:FontWeight.bold,color:ink)),
