@@ -308,44 +308,43 @@ class TvLink {
     remote.sendText(value);
   }
 
-  /// Send the TV editor's Select All + Delete sequence without inserting text.
-  /// A remote-only connection cannot confirm whether the editor obeyed it.
-  Future<void> clearText() => replaceText('');
-
-  /// Replace the focused TV input's contents rather than appending.
+  /// Clear the TV's focused input with 100 individual Backspace key events.
   ///
-  /// Remote v2 exposes key events and text injection, but cannot directly
-  /// inspect/edit TV text fields. Ctrl+A followed by Delete is the standard
-  /// select-all mechanism when the focused TV editor supports it.
-  /// If a TV app/keyboard ignores Ctrl+A, replacement cannot be guaranteed
-  /// without a TV-side accessibility/IME companion.
-  bool _replacingText = false;
-  Future<void> replaceText(String value) async {
-    if (_replacingText) {
-      throw StateError('Text replacement is already in progress.');
+  /// Android TV Remote v2 does not offer a reliable "select all" or a way
+  /// to read the field contents. Move to the end first, then delete backward.
+  /// Some applications may intercept/ignore remote keyboard key events.
+  static const int clearKeyCount = 100;
+  bool _clearingText = false;
+
+  Future<void> clearText() async {
+    if (_clearingText) {
+      throw StateError('TV text clearing is already in progress.');
     }
     if (!connected) throw StateError('No TV connected');
-    _replacingText = true;
-    var controlHeld = false;
+    _clearingText = true;
     try {
-      remote.sendKeyPress(RemoteKeyCode.ctrlLeft);
-      controlHeld = true;
-      await Future<void>.delayed(const Duration(milliseconds: 80));
-      remote.sendKey(RemoteKeyCode.a);
-      await Future<void>.delayed(const Duration(milliseconds: 130));
-      remote.sendKeyRelease(RemoteKeyCode.ctrlLeft);
-      controlHeld = false;
-      await Future<void>.delayed(const Duration(milliseconds: 130));
-      remote.sendKey(RemoteKeyCode.del);
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      // An empty string intentionally clears the field.
-      if (value.isNotEmpty) remote.sendText(value);
-    } finally {
-      if (controlHeld && connected) {
-        try { remote.sendKeyRelease(RemoteKeyCode.ctrlLeft); }
-        catch (_) {}
+      // Start erasing at the end rather than at the TV's cursor position.
+      remote.sendKey(RemoteKeyCode.moveEnd);
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      for (var i = 0; i < clearKeyCount; i++) {
+        if (!connected) {
+          throw StateError('TV disconnected during text clearing.');
+        }
+        remote.sendKey(RemoteKeyCode.del);
+        // Space events to avoid overwhelming slower Android TV input services.
+        await Future<void>.delayed(const Duration(milliseconds: 40));
       }
-      _replacingText = false;
+    } finally {
+      _clearingText = false;
     }
   }
+
+  /// Optional combined operation for callers that really want both actions.
+  /// The primary UI deliberately exposes Clear and Send as separate buttons.
+  Future<void> replaceText(String value) async {
+    await clearText();
+    if (!connected) throw StateError('TV disconnected before sending text.');
+    if (value.isNotEmpty) remote.sendText(value);
+  }
+
 }
