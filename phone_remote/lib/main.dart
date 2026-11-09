@@ -427,7 +427,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    try{
      await TvLink.instance.clearText();
      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-       const SnackBar(content:Text('Clear command sent. Check the TV text field.')));
+       const SnackBar(content:Text('100 Delete presses sent. Check the TV text field.')));
    }catch(e){
      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
        SnackBar(content:Text('Could not clear TV text: $e')));
@@ -608,7 +608,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
     Expanded(child:OutlinedButton.icon(
       onPressed:clearingTvText?null:clearTvText,
       icon:const Icon(Icons.backspace_outlined),
-      label:Text(clearingTvText?'Clearing…':'Clear TV Text'))),
+      label:Text(clearingTvText?'Deleting 100…':'Clear TV Text'))),
     const SizedBox(width:10),
     Expanded(child:FilledButton.icon(
       onPressed:clearingTvText?null:sendTypedText,
@@ -616,9 +616,9 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
       label:const Text('Send Text'))),
   ]),
   const SizedBox(height:8),
-  const Text('Select the TV text field first. Clear TV Text attempts Select All + Delete. '
-    'Send Text inserts only the entered text, without clearing. Some TV apps '
-    'do not support remote Select All.',
+  const Text('Focus the TV text field first. Clear TV Text sends 100 '
+    'Backspace presses from the end of the field. Send Text inserts '
+    'the new text separately. TV app support may vary.',
     style:TextStyle(fontSize:11,color:Colors.black54))]));
  Widget browser()=>panel(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
   const Text("Champak's TV Browser",style:TextStyle(fontSize:21,fontWeight:FontWeight.bold,color:ink)),
@@ -692,7 +692,7 @@ class _RemoteHomeState extends State<RemoteHome> with WidgetsBindingObserver{
    body:SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(16),
     child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
      Row(children:[Text(names[page],style:const TextStyle(fontSize:28,color:ink,fontWeight:FontWeight.bold)),
-      const Spacer(),const Chip(label:Text('V1.6.3'))]),const SizedBox(height:14),
+      const Spacer(),const Chip(label:Text('V1.6.4'))]),const SizedBox(height:14),
      pages[page],const SizedBox(height:28),
      const Center(child:Text('Developed and maintained by Champak Roy',
       style:TextStyle(fontSize:11,color:Colors.black38)))]))),
